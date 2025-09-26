@@ -1,103 +1,71 @@
-import Image from "next/image";
+// app/page.tsx - Main application page
+'use client';
 
-export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+import { useState, useEffect } from 'react';
+import { useAuthStore } from '@/store/authStore';
+import { useAuthInit } from '@/hooks/useAuthInit';
+import LoginForm from '@/components/LoginForm';
+import SignupFlow from '@/components/SignupFlow';
+import Home from '@/components/Home';
+import { Toaster } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+type AuthView = 'login' | 'signup';
+
+export default function HomePage() {
+  const { isAuthenticated, token, user, isLoading } = useAuthStore();
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [authView, setAuthView] = useState<AuthView>('login');
+  const [isInitializing, setIsInitializing] = useState(true);
+  
+  // Initialize auth state on app start
+  const { isInitialized } = useAuthInit();
+
+  // Track hydration state for SSR compatibility
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  // Wait for both hydration and auth initialization
+  useEffect(() => {
+    if (isHydrated && isInitialized) {
+      // Give a brief moment for any pending auth operations to complete
+      const timer = setTimeout(() => {
+        setIsInitializing(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isHydrated, isInitialized]);
+
+  // Show loading state until everything is ready
+  if (!isHydrated || isInitializing || isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-600">Loading AssetWorks...</p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Toast notifications */}
+      <Toaster position="top-right" richColors />
+      
+      {/* Render based on authentication state */}
+      {isAuthenticated && token && user ? (
+        <Home />
+      ) : (
+        <div>
+          {authView === 'login' ? (
+            <LoginForm onSwitchToSignup={() => setAuthView('signup')} />
+          ) : (
+            <SignupFlow onSwitchToLogin={() => setAuthView('login')} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
