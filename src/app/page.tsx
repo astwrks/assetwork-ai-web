@@ -9,6 +9,7 @@ import SignupFlow from '@/components/SignupFlow';
 import Home from '@/components/Home';
 import { Toaster } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 type AuthView = 'login' | 'signup';
 
@@ -17,6 +18,7 @@ export default function HomePage() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
   const [isInitializing, setIsInitializing] = useState(true);
+  const router = useRouter();
   
   // Initialize auth state on app start
   const { isInitialized } = useAuthInit();
@@ -37,13 +39,20 @@ export default function HomePage() {
     }
   }, [isHydrated, isInitialized]);
 
+  // Redirect to reports page if authenticated
+  useEffect(() => {
+    if (isAuthenticated && token && user && isHydrated && isInitialized) {
+      router.push('/reports');
+    }
+  }, [isAuthenticated, token, user, isHydrated, isInitialized, router]);
+
   // Show loading state until everything is ready
   if (!isHydrated || isInitializing || isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
-          <p className="text-gray-600">Loading AssetWorks...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading AssetWorks...</p>
         </div>
       </div>
     );
@@ -56,7 +65,12 @@ export default function HomePage() {
       
       {/* Render based on authentication state */}
       {isAuthenticated && token && user ? (
-        <Home />
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
+            <p className="text-gray-600 dark:text-gray-400">Redirecting to reports...</p>
+          </div>
+        </div>
       ) : (
         <div>
           {authView === 'login' ? (
