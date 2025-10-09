@@ -1,0 +1,196 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+  }
+
+  html,
+  body {
+    max-width: 100vw;
+    overflow-x: hidden;
+    /* Official AssetWorks Typography - Euclid Circular A */
+    font-family: "Euclid Circular A", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 24px;
+    color: #2C3E50; /* Heavy Text from guidelines */
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Typography Hierarchy - Official Guidelines */
+  h1 {
+    font-family: "Euclid Circular A", sans-serif;
+    font-weight: 700;
+    font-size: 48px;
+    line-height: 56px;
+    color: #1B2951; /* Primary Navy */
+  }
+
+  h2 {
+    font-family: "Euclid Circular A", sans-serif;
+    font-weight: 600;
+    font-size: 36px;
+    line-height: 44px;
+    color: #1B2951;
+  }
+
+  h3 {
+    font-family: "Euclid Circular A", sans-serif;
+    font-weight: 500;
+    font-size: 28px;
+    line-height: 36px;
+    color: #1B2951;
+  }
+
+  h4 {
+    font-family: "Euclid Circular A", sans-serif;
+    font-weight: 500;
+    font-size: 24px;
+    line-height: 32px;
+    color: #1B2951;
+  }
+
+  h5 {
+    font-family: "Euclid Circular A", sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    line-height: 24px;
+    color: #1B2951;
+  }
+
+  h6 {
+    font-family: "Euclid Circular A", sans-serif;
+    font-weight: 500;
+    font-size: 16px;
+    line-height: 22px;
+    color: #1B2951;
+  }
+}
+
+/* Widget Container Styles */
+.widget-container {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+.widget-container > div {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Ensure widgets are responsive */
+.widget-container iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+.widget-container table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.widget-container pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* shadcn/ui Theme with AssetWorks Brand Colors */
+@layer base {
+  :root {
+    /* AssetWorks Primary Navy #1B2951 */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 19%; /* #1B2951 in HSL */
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 19%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 19%;
+
+    /* Primary Navy */
+    --primary: 222 47% 19%; /* #1B2951 */
+    --primary-foreground: 0 0% 100%;
+
+    /* Selection Blue-Gray */
+    --secondary: 220 17% 51%; /* #6C7B95 */
+    --secondary-foreground: 0 0% 100%;
+
+    /* Light Gray Background */
+    --muted: 210 17% 98%; /* #F8F9FA */
+    --muted-foreground: 220 17% 51%;
+
+    /* Accent - Deep Blue */
+    --accent: 209 33% 37%; /* #405D80 */
+    --accent-foreground: 0 0% 100%;
+
+    /* Danger Red */
+    --destructive: 354 70% 54%; /* #DC3545 */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders */
+    --border: 210 16% 93%; /* #E9ECEF */
+    --input: 210 16% 93%;
+    --ring: 222 47% 19%; /* Primary Navy for focus */
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 17% 98%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 17% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 17% 98%;
+
+    --primary: 210 17% 98%;
+    --primary-foreground: 222 47% 19%;
+
+    --secondary: 220 17% 51%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 222 47% 15%;
+    --muted-foreground: 220 17% 65%;
+
+    --accent: 209 33% 37%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 354 70% 54%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 47% 15%;
+    --input: 222 47% 15%;
+    --ring: 220 17% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
