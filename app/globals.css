@@ -98,6 +98,61 @@
   }
 }
 
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%) rotate(-10deg);
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(200%) rotate(10deg);
+    opacity: 0.3;
+  }
+}
+
+@keyframes shimmerPulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2.5s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(59, 130, 246, 0.1) 25%,
+    rgba(147, 51, 234, 0.2) 50%,
+    rgba(59, 130, 246, 0.1) 75%,
+    transparent 100%
+  );
+  filter: blur(8px);
+}
+
+.animate-shimmer-pulse {
+  animation: shimmerPulse 1.5s ease-in-out infinite;
+}
+
 /* Ensure widgets are responsive */
 .widget-container iframe {
   max-width: 100%;

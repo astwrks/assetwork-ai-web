@@ -330,8 +330,8 @@ export default function LandingPage() {
             </div>
 
             <div className="flex items-center gap-4">
-              <Link href="/ai-chat">
-                <Button variant="ghost" size="sm">AI Chat</Button>
+              <Link href="/financial-playground">
+                <Button variant="ghost" size="sm">Financial Playground</Button>
               </Link>
               <Link href="/auth/signin">
                 <Button variant="ghost" size="sm">Sign In</Button>
@@ -413,7 +413,7 @@ export default function LandingPage() {
               transition={{ duration: 0.5, delay: 0.3 }}
               className="flex flex-col sm:flex-row gap-3 justify-center mb-6"
             >
-              <Link href="/ai-chat">
+              <Link href="/financial-playground">
                 <Button size="lg" className="h-12 px-8 gap-2 shadow-lg shadow-primary/25">
                   <Rocket className="w-4 h-4" />
                   Start Free Trial
@@ -1152,7 +1152,7 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-              <Link href="/ai-chat">
+              <Link href="/financial-playground">
                 <Button size="lg" className="h-16 px-10 text-lg gap-3 shadow-xl shadow-primary/25">
                   <Rocket className="w-6 h-6" />
                   Start Free Trial

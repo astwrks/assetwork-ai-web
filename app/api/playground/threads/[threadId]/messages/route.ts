@@ -4,10 +4,11 @@ import { connectToDatabase } from '@/lib/db/mongodb';
 import Thread from '@/lib/db/models/Thread';
 import Message from '@/lib/db/models/Message';
 import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
+import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
 
-// System prompt for financial report generation
+// System prompt for financial report generation with AssetWorks branding
 const FINANCIAL_REPORT_PROMPT = `You are an expert financial analyst and data visualization specialist. Your role is to:
 
 1. Generate comprehensive, professional financial reports in HTML format
@@ -22,23 +23,90 @@ const FINANCIAL_REPORT_PROMPT = `You are an expert financial analyst and data vi
 4. Each section MUST have:
    - A unique ID in this format: data-section-id="section_[type]_[number]"
    - A clear title
-   - Professional styling using Tailwind CSS classes
+   - Professional styling using AssetWorks brand colors
 
 5. Provide 2-4 key insights at the top of each report
 
-6. Return ONLY the HTML content, properly structured and styled
+6. CRITICAL DATA SOURCE REQUIREMENTS:
+   - Use web search to gather current, accurate financial data
+   - ALWAYS cite data sources with entity name, category, and source URL
+   - Include a "Data Sources" section at the end of every report
+   - Format: "Company Name (Category) - Source: [URL or Database Name]"
+   - Example: "Apple Inc. (Technology) - Source: Yahoo Finance Q4 2024 Earnings"
+   - Never fabricate data - if data isn't available via search, clearly state "Data not available"
 
-Example section structure:
-<div data-section-id="section_metric_1" class="report-section mb-6 p-4 bg-white rounded-lg shadow">
+7. Return ONLY the HTML content, properly structured and styled
+
+ASSETWORKS BRAND COLORS (use these exclusively):
+- Primary Navy: #1B2951 (headings, important text, primary buttons)
+- Deep Blue: #405D80 (secondary accents, gradients)
+- Selection Blue-Gray: #6C7B95 (labels, secondary text)
+- Heavy Text: #2C3E50 (body text)
+- Light Gray: #F8F9FA (backgrounds)
+- Border Gray: #E9ECEF (borders, dividers)
+- Danger Red: #DC3545 (warnings, critical alerts)
+
+Example section structures:
+
+METRIC CARD:
+<div data-section-id="section_metric_1" class="report-section mb-6 p-6 rounded-lg shadow-md" style="background: linear-gradient(135deg, #1B2951 0%, #405D80 100%); color: white;">
   <h3 class="text-lg font-semibold mb-2">Revenue Growth</h3>
-  <div class="text-3xl font-bold text-green-600">$4.2M</div>
-  <p class="text-sm text-gray-600">+18% YoY</p>
-</div>`;
+  <div class="text-4xl font-bold mb-1">$4.2M</div>
+  <p class="text-sm opacity-90">+18% YoY</p>
+</div>
+
+TEXT SECTION:
+<div data-section-id="section_text_1" class="report-section mb-6 p-6 bg-white rounded-lg shadow-md border" style="border-color: #E9ECEF;">
+  <h3 class="text-xl font-semibold mb-4" style="color: #1B2951;">Financial Analysis</h3>
+  <p style="color: #2C3E50; line-height: 1.6;">Your analysis text here...</p>
+</div>
+
+TABLE SECTION:
+<div data-section-id="section_table_1" class="report-section mb-6 p-6 bg-white rounded-lg shadow-md">
+  <h3 class="text-xl font-semibold mb-4" style="color: #1B2951;">Financial Summary</h3>
+  <table class="w-full">
+    <thead>
+      <tr style="background: rgba(27, 41, 81, 0.05);">
+        <th class="p-3 text-left font-semibold" style="color: #1B2951; border-bottom: 2px solid #E9ECEF;">Item</th>
+        <th class="p-3 text-right font-semibold" style="color: #1B2951; border-bottom: 2px solid #E9ECEF;">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="hover:bg-gray-50">
+        <td class="p-3" style="color: #2C3E50; border-bottom: 1px solid #E9ECEF;">Revenue</td>
+        <td class="p-3 text-right" style="color: #2C3E50; border-bottom: 1px solid #E9ECEF;">$4.2M</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+INSIGHT SECTION:
+<div data-section-id="section_insight_1" class="report-section mb-6 p-5 rounded-lg" style="background: rgba(27, 41, 81, 0.05); border-left: 4px solid #1B2951;">
+  <div class="flex items-start gap-3">
+    <div class="font-semibold" style="color: #1B2951;">💡 Key Insight</div>
+    <p style="color: #2C3E50;">Your insight text here...</p>
+  </div>
+</div>
+
+DATA SOURCES SECTION (REQUIRED at end of every report):
+<div data-section-id="section_sources_1" class="report-section mb-6 p-6 bg-white rounded-lg shadow-md border-t-4" style="border-top-color: #405D80;">
+  <h3 class="text-xl font-semibold mb-4" style="color: #1B2951;">📊 Data Sources</h3>
+  <ul class="space-y-2">
+    <li style="color: #2C3E50;">
+      <strong>Apple Inc.</strong> (Technology) - Source: <a href="https://finance.yahoo.com/quote/AAPL" style="color: #405D80; text-decoration: underline;">Yahoo Finance Q4 2024</a>
+    </li>
+    <li style="color: #2C3E50;">
+      <strong>Tesla Inc.</strong> (Automotive) - Source: <a href="https://ir.tesla.com" style="color: #405D80; text-decoration: underline;">Tesla Investor Relations</a>
+    </li>
+  </ul>
+</div>
+
+Use these styles consistently throughout all generated reports.`;
 
 // POST /api/playground/threads/:threadId/messages - Send message and generate report
 export async function POST(
   request: NextRequest,
-  { params }: { params: { threadId: string } }
+  { params }: { params: Promise<{ threadId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -48,7 +116,7 @@ export async function POST(
 
     await connectToDatabase();
 
-    const { threadId } = params;
+    const { threadId } = await params;
     const body = await request.json();
     const { content, model = 'claude-3-5-sonnet-20241022', provider = 'anthropic' } = body;
 
@@ -85,6 +153,60 @@ export async function POST(
       await thread.save();
     }
 
+    // Load user's playground settings
+    let settings = await PlaygroundSettings.findOne({
+      userId: session.user.email,
+      isGlobal: false,
+    });
+
+    // If no user settings, try global settings
+    if (!settings) {
+      settings = await PlaygroundSettings.findOne({ isGlobal: true });
+    }
+
+    // If still no settings, create default
+    if (!settings) {
+      settings = new PlaygroundSettings({
+        userId: session.user.email,
+        isGlobal: false,
+        lastModifiedBy: session.user.email,
+      });
+      await settings.save();
+    }
+
+    // Select system prompt based on activeSystemPromptId
+    let systemPrompt = FINANCIAL_REPORT_PROMPT;
+
+    if (settings.systemPrompts && settings.systemPrompts.length > 0 && settings.activeSystemPromptId) {
+      const activePrompt = settings.systemPrompts.find(
+        (p) => p.id === settings.activeSystemPromptId
+      );
+      if (activePrompt) {
+        systemPrompt = activePrompt.content;
+      } else {
+        // Fallback to legacy systemPrompt field if active prompt not found
+        systemPrompt = settings.systemPrompt || FINANCIAL_REPORT_PROMPT;
+      }
+    } else {
+      // Fallback to legacy systemPrompt field
+      systemPrompt = settings.systemPrompt || FINANCIAL_REPORT_PROMPT;
+    }
+
+    // Validate provider and model are enabled
+    const selectedProvider = settings.providers.find(
+      (p) => p.id === provider && p.enabled
+    );
+    if (!selectedProvider) {
+      return new Response('Selected provider is not enabled', { status: 400 });
+    }
+
+    const selectedModel = selectedProvider.models.find(
+      (m) => m.id === model && m.enabled
+    );
+    if (!selectedModel) {
+      return new Response('Selected model is not enabled', { status: 400 });
+    }
+
     // Get conversation history
     const previousMessages = await Message.find({ threadId })
       .sort({ createdAt: 1 })
@@ -112,15 +234,19 @@ export async function POST(
         if (provider === 'anthropic' || model.startsWith('claude')) {
           generator = claudeService.streamResponse({
             messages: messages as Array<{ role: 'user' | 'assistant'; content: string }>,
-            systemPrompt: FINANCIAL_REPORT_PROMPT,
+            systemPrompt: systemPrompt,
             model,
+            temperature: selectedModel.temperature,
+            maxTokens: selectedModel.maxTokens,
           });
         } else {
           generator = openaiService.streamResponse({
             messages: [
-              { role: 'system', content: FINANCIAL_REPORT_PROMPT },
+              { role: 'system', content: systemPrompt },
               ...messages,
             ],
+            temperature: selectedModel.temperature,
+            maxTokens: selectedModel.maxTokens,
           });
         }
 
@@ -162,11 +288,16 @@ export async function POST(
         thread.reportVersions.push(report._id.toString());
         await thread.save();
 
-        // Save assistant message
+        // Generate a conversational summary for chat display
+        const sectionCount = sections.length;
+        const insightCount = insights.length;
+        const chatSummary = generateChatSummary(sectionCount, insightCount, content);
+
+        // Save assistant message with summary (not full HTML)
         const assistantMessage = new Message({
           threadId,
           role: 'assistant',
-          content: accumulatedContent,
+          content: chatSummary,
           reportId: report._id.toString(),
           metadata: {
             model,
@@ -274,10 +405,21 @@ function extractInsights(html: string) {
   return insights;
 }
 
+// Helper function to generate conversational chat summary
+function generateChatSummary(sectionCount: number, insightCount: number, userRequest: string): string {
+  // Extract key topic from user request (first few words)
+  const topic = userRequest.length > 60 ? userRequest.substring(0, 60) + '...' : userRequest;
+
+  const sectionText = sectionCount === 1 ? '1 section' : `${sectionCount} sections`;
+  const insightText = insightCount > 0 ? ` with ${insightCount} key insights` : '';
+
+  return `I've created a comprehensive report about "${topic}" with ${sectionText}${insightText}. You can view the full report in the right panel, where you can interact with individual sections, edit them, or download the report as PDF.`;
+}
+
 // GET /api/playground/threads/:threadId/messages - Get all messages
 export async function GET(
   request: NextRequest,
-  { params }: { params: { threadId: string } }
+  { params }: { params: Promise<{ threadId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -287,7 +429,7 @@ export async function GET(
 
     await connectToDatabase();
 
-    const { threadId } = params;
+    const { threadId } = await params;
 
     // Verify thread access
     const thread = await Thread.findById(threadId);

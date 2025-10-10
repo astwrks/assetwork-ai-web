@@ -28,7 +28,9 @@ export interface IPlaygroundReport {
   parentReportId?: string; // For version control - which report this was derived from
   htmlContent: string; // Full HTML content
   sections: IReportSection[];
+  sectionRefs: string[]; // References to ReportSection documents for interactive mode
   insights: IInsight[];
+  isInteractiveMode: boolean; // If true, sections are managed separately
   metadata?: {
     generatedBy?: string; // User ID
     model?: string; // AI model used
@@ -125,9 +127,18 @@ const PlaygroundReportSchema = new mongoose.Schema<IPlaygroundReport>(
       type: [ReportSectionSchema],
       default: [],
     },
+    sectionRefs: {
+      type: [String],
+      default: [],
+      index: true,
+    },
     insights: {
       type: [InsightSchema],
       default: [],
+    },
+    isInteractiveMode: {
+      type: Boolean,
+      default: false,
     },
     metadata: {
       generatedBy: String,

@@ -383,7 +383,7 @@ export default function SettingsPage() {
               <Link href="/dashboard">
                 <Button variant="ghost">Dashboard</Button>
               </Link>
-              <Link href="/ai-chat">
+              <Link href="/financial-playground">
                 <Button variant="ghost">AI Chat</Button>
               </Link>
             </div>

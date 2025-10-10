@@ -8,7 +8,7 @@ import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
 // GET /api/playground/threads/:threadId - Get specific thread with messages and current report
 export async function GET(
   request: NextRequest,
-  { params }: { params: { threadId: string } }
+  { params }: { params: Promise<{ threadId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -18,7 +18,7 @@ export async function GET(
 
     await connectToDatabase();
 
-    const { threadId } = params;
+    const { threadId } = await params;
 
     // Find thread and verify ownership or sharing
     const thread = await Thread.findById(threadId);
@@ -67,7 +67,7 @@ export async function GET(
 // PATCH /api/playground/threads/:threadId - Update thread
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { threadId: string } }
+  { params }: { params: Promise<{ threadId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -77,7 +77,7 @@ export async function PATCH(
 
     await connectToDatabase();
 
-    const { threadId } = params;
+    const { threadId } = await params;
     const body = await request.json();
 
     // Find thread and verify ownership
@@ -121,7 +121,7 @@ export async function PATCH(
 // DELETE /api/playground/threads/:threadId - Delete thread
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { threadId: string } }
+  { params }: { params: Promise<{ threadId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -131,7 +131,7 @@ export async function DELETE(
 
     await connectToDatabase();
 
-    const { threadId } = params;
+    const { threadId } = await params;
 
     // Find thread and verify ownership
     const thread = await Thread.findById(threadId);

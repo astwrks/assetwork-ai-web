@@ -180,8 +180,8 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex items-center space-x-4">
-              <Link href="/ai-chat">
-                <Button variant="ghost" size="icon" title="AI Chat">
+              <Link href="/financial-playground">
+                <Button variant="ghost" size="icon" title="Financial Playground">
                   <MessageSquare className="w-5 h-5" />
                 </Button>
               </Link>
