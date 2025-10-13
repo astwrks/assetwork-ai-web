@@ -7,9 +7,10 @@ import Thread from '@/lib/db/models/Thread';
 // POST /api/playground/templates/[templateId]/use - Create a thread from template
 export async function POST(
   request: NextRequest,
-  { params }: { params: { templateId: string } }
+  { params }: { params: Promise<{ templateId: string }> }
 ) {
   try {
+    const { templateId } = await params;
     const session = await getServerSession();
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,7 +19,7 @@ export async function POST(
     await connectToDatabase();
 
     // Find the template
-    const template = await Template.findById(params.templateId);
+    const template = await Template.findById(templateId);
 
     if (!template) {
       return NextResponse.json(
@@ -77,7 +78,7 @@ export async function POST(
 
     // Increment template usage count
     await Template.findByIdAndUpdate(
-      params.templateId,
+      templateId,
       { $inc: { usageCount: 1 } }
     );
 
