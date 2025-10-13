@@ -5,8 +5,10 @@ export interface IApiKey {
   _id: string;
   userId: string;
   name: string;
-  provider: 'openai' | 'anthropic' | 'google' | 'groq' | 'alpha_vantage' | 'polygon' | 'finnhub' | 'coinmarketcap' | 'custom';
+  provider: 'openai' | 'anthropic' | 'google' | 'groq' | 'alpha_vantage' | 'coingecko' | 'polygon' | 'finnhub' | 'coinmarketcap' | 'custom';
   category: 'ai' | 'financial_data' | 'crypto' | 'other';
+  connectionStatus?: 'connected' | 'error' | 'unknown';
+  lastChecked?: Date;
   encryptedKey: string;
   keyPreview: string; // Last 4 chars for display
   isActive: boolean;
@@ -36,10 +38,16 @@ const ApiKeySchema = new mongoose.Schema<IApiKey>(
     },
     provider: {
       type: String,
-      enum: ['openai', 'anthropic', 'google', 'groq', 'alpha_vantage', 'polygon', 'finnhub', 'coinmarketcap', 'custom'],
+      enum: ['openai', 'anthropic', 'google', 'groq', 'alpha_vantage', 'coingecko', 'polygon', 'finnhub', 'coinmarketcap', 'custom'],
       required: true,
       index: true,
     },
+    connectionStatus: {
+      type: String,
+      enum: ['connected', 'error', 'unknown'],
+      default: 'unknown',
+    },
+    lastChecked: Date,
     category: {
       type: String,
       enum: ['ai', 'financial_data', 'crypto', 'other'],

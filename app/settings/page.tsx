@@ -68,6 +68,9 @@ export default function SettingsPage() {
 
   // API Keys state
   const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [financialDataKeys, setFinancialDataKeys] = useState<any[]>([]);
+  const [financialDataSummary, setFinancialDataSummary] = useState<any>(null);
+  const [checkingConnection, setCheckingConnection] = useState(false);
   const [showAddKey, setShowAddKey] = useState(false);
   const [newKey, setNewKey] = useState({
     name: '',
@@ -130,6 +133,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (status === 'authenticated') {
       fetchApiKeys();
+      fetchFinancialDataKeys();
       fetchAIModels();
     }
   }, [status]);
@@ -178,6 +182,47 @@ export default function SettingsPage() {
     }
   };
 
+  const fetchFinancialDataKeys = async () => {
+    try {
+      const res = await fetch('/api/settings/financial-data');
+      const data = await res.json();
+      if (data.success) {
+        setFinancialDataKeys(data.keys);
+        setFinancialDataSummary(data.summary);
+      }
+    } catch (error) {
+      console.error('Failed to fetch financial data keys:', error);
+    }
+  };
+
+  const handleCheckConnection = async (keyId?: string) => {
+    setCheckingConnection(true);
+    try {
+      const res = await fetch('/api/settings/financial-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyId: keyId || undefined,
+          checkAll: !keyId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        toast.success(`Connection check complete: ${data.summary.connected} connected, ${data.summary.error} errors`);
+        // Refresh the financial data keys
+        await fetchFinancialDataKeys();
+      } else {
+        toast.error(data.error || 'Failed to check connection');
+      }
+    } catch (error) {
+      toast.error('Failed to check connection');
+    } finally {
+      setCheckingConnection(false);
+    }
+  };
+
   const fetchAIModels = async () => {
     try {
       const res = await fetch('/api/ai/models');
@@ -214,8 +259,9 @@ export default function SettingsPage() {
         setApiKeys([...apiKeys, data.key]);
         setNewKey({ name: '', provider: '', category: 'financial_data', apiKey: '' });
         setShowAddKey(false);
-        // Refresh AI models
+        // Refresh AI models and financial data keys
         await fetchAIModels();
+        await fetchFinancialDataKeys();
       } else {
         toast.error(data.error || 'Failed to add API key');
       }
@@ -601,9 +647,68 @@ export default function SettingsPage() {
                     </div>
                   )}
 
+                  {/* Connection Status Summary */}
+                  {financialDataSummary && financialDataSummary.total > 0 && (
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      <Card className="bg-muted/50">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Connected</p>
+                              <p className="text-2xl font-bold text-green-600">{financialDataSummary.connected}</p>
+                            </div>
+                            <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
+                              <Check className="w-5 h-5 text-green-600" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-muted/50">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Errors</p>
+                              <p className="text-2xl font-bold text-red-600">{financialDataSummary.error}</p>
+                            </div>
+                            <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+                              <AlertCircle className="w-5 h-5 text-red-600" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-muted/50">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Unknown</p>
+                              <p className="text-2xl font-bold text-orange-600">{financialDataSummary.unknown}</p>
+                            </div>
+                            <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
+                              <AlertCircle className="w-5 h-5 text-orange-600" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+
+                  {/* Check All Connections Button */}
+                  {financialDataKeys.length > 0 && (
+                    <div className="flex justify-end mb-4">
+                      <Button
+                        onClick={() => handleCheckConnection()}
+                        disabled={checkingConnection}
+                        variant="outline"
+                        size="sm"
+                      >
+                        {checkingConnection ? 'Checking...' : 'Check All Connections'}
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Integrations List */}
                   <div className="space-y-3">
-                    {apiKeys.filter(key => key.category !== 'ai').length === 0 ? (
+                    {financialDataKeys.length === 0 ? (
                       <div className="text-center py-12 text-muted-foreground">
                         <Database className="w-16 h-16 mx-auto mb-4 opacity-30" />
                         <p className="text-lg font-semibold mb-2">No data sources configured</p>
@@ -612,27 +717,39 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     ) : (
-                      apiKeys.filter(key => key.category !== 'ai').map((key) => (
+                      financialDataKeys.map((key) => (
                         <div
                           key={key.id}
                           className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-accent/50 transition-colors"
                         >
-                          <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-4 flex-1">
                             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                              {key.category === 'ai' && <Brain className="w-5 h-5 text-primary" />}
                               {key.category === 'financial_data' && <Database className="w-5 h-5 text-primary" />}
                               {key.category === 'crypto' && <DollarSign className="w-5 h-5 text-primary" />}
                               {key.category === 'other' && <Key className="w-5 h-5 text-primary" />}
                             </div>
-                            <div>
+                            <div className="flex-1">
                               <div className="flex items-center gap-2">
                                 <p className="font-semibold">{key.name}</p>
                                 <Badge variant="secondary" className="text-xs">
                                   {key.provider}
                                 </Badge>
-                                {key.isActive && (
-                                  <Badge variant="default" className="text-xs bg-green-600">
-                                    Active
+                                {key.connectionStatus === 'connected' && (
+                                  <Badge className="text-xs bg-green-600">
+                                    <Check className="w-3 h-3 mr-1" />
+                                    Connected
+                                  </Badge>
+                                )}
+                                {key.connectionStatus === 'error' && (
+                                  <Badge className="text-xs bg-red-600">
+                                    <AlertCircle className="w-3 h-3 mr-1" />
+                                    Error
+                                  </Badge>
+                                )}
+                                {key.connectionStatus === 'unknown' && (
+                                  <Badge variant="outline" className="text-xs">
+                                    <AlertCircle className="w-3 h-3 mr-1" />
+                                    Not Checked
                                   </Badge>
                                 )}
                               </div>
@@ -654,20 +771,36 @@ export default function SettingsPage() {
                                 </span>
                                 {key.lastUsed && (
                                   <span>
-                                    Last used: {new Date(key.lastUsed).toLocaleDateString()}
+                                    • Last used: {new Date(key.lastUsed).toLocaleDateString()}
+                                  </span>
+                                )}
+                                {key.lastChecked && (
+                                  <span>
+                                    • Last checked: {new Date(key.lastChecked).toLocaleDateString()} at {new Date(key.lastChecked).toLocaleTimeString()}
                                   </span>
                                 )}
                               </div>
                             </div>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteApiKey(key.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleCheckConnection(key.id)}
+                              disabled={checkingConnection}
+                              title="Check connection"
+                            >
+                              <AlertCircle className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteApiKey(key.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
                       ))
                     )}
