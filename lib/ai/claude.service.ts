@@ -1,9 +1,17 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { CLAUDE_SYSTEM_PROMPT } from './system-prompt';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+// Lazy initialization to avoid errors during build time
+let anthropic: Anthropic | null = null;
+
+function getAnthropic(): Anthropic {
+  if (!anthropic) {
+    anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY || 'dummy-key-for-build',
+    });
+  }
+  return anthropic;
+}
 
 export interface ClaudeMessage {
   role: 'user' | 'assistant';
@@ -22,7 +30,7 @@ export interface ClaudeStreamOptions {
 export class ClaudeService {
   async generateResponse(prompt: string, systemPrompt?: string): Promise<string> {
     try {
-      const response = await anthropic.messages.create({
+      const response = await getAnthropic().messages.create({
         model: 'claude-3-5-sonnet-20241022',
         max_tokens: 1000,
         temperature: 0.7,
@@ -38,7 +46,7 @@ export class ClaudeService {
       if (response.content[0].type === 'text') {
         return response.content[0].text;
       }
-      
+
       return '';
     } catch (error) {
       console.error('Claude API error:', error);
@@ -54,7 +62,7 @@ export class ClaudeService {
     model = 'claude-3-5-sonnet-20241022',
   }: ClaudeStreamOptions): AsyncGenerator<string> {
     try {
-      const stream = await anthropic.messages.create({
+      const stream = await getAnthropic().messages.create({
         model: model,
         max_tokens: maxTokens,
         temperature,

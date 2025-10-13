@@ -1,10 +1,7 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
-
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable');
-}
+// MongoDB is optional during migration to PostgreSQL
+const MONGODB_URI = process.env.MONGODB_URI || '';
 
 interface MongooseCache {
   conn: typeof mongoose | null;
@@ -22,6 +19,11 @@ if (!global.mongoose) {
 }
 
 export async function connectToDatabase() {
+  // Return early if MongoDB URI is not configured (during migration to PostgreSQL)
+  if (!MONGODB_URI) {
+    throw new Error('MongoDB URI not configured. Please use PostgreSQL instead.');
+  }
+
   if (cached.conn) {
     return cached.conn;
   }

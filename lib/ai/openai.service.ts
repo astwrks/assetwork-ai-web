@@ -1,8 +1,16 @@
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+// Lazy initialization to avoid errors during build time
+let openai: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!openai) {
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY || 'dummy-key-for-build',
+    });
+  }
+  return openai;
+}
 
 export interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -22,7 +30,7 @@ export class OpenAIService {
     model = 'gpt-4-turbo-preview'
   ): Promise<string> {
     try {
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model,
         messages,
         temperature: 0.7,
@@ -43,7 +51,7 @@ export class OpenAIService {
     maxTokens = 1000,
   }: OpenAIStreamOptions): AsyncGenerator<string> {
     try {
-      const stream = await openai.chat.completions.create({
+      const stream = await getOpenAI().chat.completions.create({
         model,
         messages,
         temperature,

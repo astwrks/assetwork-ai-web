@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, X, Send, Loader2, Sparkles } from 'lucide-react';
@@ -21,6 +21,14 @@ export default function AddSectionButton({
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([
+    'Add a bar chart comparing monthly revenue',
+    'Create a table showing top 5 expenses',
+    'Add key financial metrics for Q4',
+    'Show year-over-year growth comparison',
+    'Add cash flow analysis section',
+  ]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -92,13 +100,37 @@ export default function AddSectionButton({
     }
   };
 
-  const suggestions = [
-    'Add a bar chart comparing monthly revenue',
-    'Create a table showing top 5 expenses',
-    'Add key financial metrics for Q4',
-    'Show year-over-year growth comparison',
-    'Add cash flow analysis section',
-  ];
+  // Fetch context-aware suggestions when dialog opens
+  useEffect(() => {
+    if (isOpen && !loadingSuggestions) {
+      fetchSmartSuggestions();
+    }
+  }, [isOpen]);
+
+  const fetchSmartSuggestions = async () => {
+    setLoadingSuggestions(true);
+    try {
+      const response = await fetch(
+        `/api/playground/reports/${reportId}/suggestions`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.suggestions) {
+          setSuggestions(data.suggestions);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch suggestions:', error);
+      // Keep default suggestions on error
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
 
   if (!isOpen) {
     return (
@@ -178,18 +210,36 @@ export default function AddSectionButton({
         </div>
 
         <div>
-          <p className="text-sm text-muted-foreground mb-2">Quick suggestions:</p>
+          <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+            Quick suggestions:
+            {loadingSuggestions && (
+              <Loader2 className="w-3 h-3 animate-spin text-primary" />
+            )}
+          </p>
           <div className="flex flex-wrap gap-2">
-            {suggestions.map((suggestion, i) => (
-              <button
-                key={i}
-                onClick={() => setPrompt(suggestion)}
-                disabled={isGenerating}
-                className="text-xs px-3 py-1 rounded-full bg-white hover:bg-gray-50 border border-gray-200 transition-colors"
-              >
-                {suggestion}
-              </button>
-            ))}
+            {loadingSuggestions ? (
+              // Loading skeleton
+              <>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div
+                    key={i}
+                    className="h-6 w-32 rounded-full bg-gray-200 animate-pulse"
+                  />
+                ))}
+              </>
+            ) : (
+              // Actual suggestions
+              suggestions.map((suggestion, i) => (
+                <button
+                  key={i}
+                  onClick={() => setPrompt(suggestion)}
+                  disabled={isGenerating}
+                  className="text-xs px-3 py-1 rounded-full bg-white hover:bg-gray-50 border border-gray-200 hover:border-primary transition-colors disabled:opacity-50"
+                >
+                  {suggestion}
+                </button>
+              ))
+            )}
           </div>
         </div>
 

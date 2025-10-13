@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Environment variable files with secrets
+COPY_PASTE_VALUES.txt
+NETLIFY_ENV_QUICK.txt
+NETLIFY_ENV_VARIABLES.env
+PASTE_TO_NETLIFY.txt
+.env.netlify
