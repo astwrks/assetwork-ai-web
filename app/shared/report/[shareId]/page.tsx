@@ -158,10 +158,10 @@ export default async function SharedReportPage({ params }: PageProps) {
                 This financial analysis report was generated using AssetWorks' AI-powered platform.
                 The data and insights presented are based on the specified parameters and available data sources at the time of generation.
               </p>
-              {report.usage && (
+              {usage && (
                 <p className="mt-2 text-xs text-gray-500">
-                  Report generation used {report.usage.totalTokens.toLocaleString()} AI tokens
-                  across {report.usage.operations?.length || 0} operations.
+                  Report generation used {usage.totalTokens?.toLocaleString() || 0} AI tokens
+                  across {usage.operations?.length || 0} operations.
                 </p>
               )}
             </div>
