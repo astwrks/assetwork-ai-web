@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
+    const existingUser = await prisma.users.findUnique({
       where: { email: email.toLowerCase() },
     });
 
@@ -36,15 +36,21 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await hashPassword(password);
 
+    // Generate unique ID
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
     // Create new user
-    const user = await prisma.user.create({
+    const user = await prisma.users.create({
       data: {
+        id: userId,
         name,
         email: email.toLowerCase(),
         password: hashedPassword,
         aiCredits: 100, // Free credits for new users
         credits: 100,
         plan: 'FREE',
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
       select: {
         id: true,
@@ -66,8 +72,20 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('Signup error:', error);
+
+    // Return detailed error in development, generic in production
+    const errorMessage = process.env.NODE_ENV === 'development'
+      ? error instanceof Error ? error.message : 'Unknown error'
+      : 'Failed to create account';
+
     return NextResponse.json(
-      { success: false, message: 'Failed to create account' },
+      {
+        success: false,
+        message: errorMessage,
+        ...(process.env.NODE_ENV === 'development' && {
+          error: error instanceof Error ? error.stack : String(error)
+        })
+      },
       { status: 500 }
     );
   }
