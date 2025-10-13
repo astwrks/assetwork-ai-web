@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
 import ApiKey from '@/lib/db/models/ApiKey';
-import { connectDB } from '@/lib/db/mongodb';
+import { connectToDatabase } from '@/lib/db/mongodb';
 import { decryptApiKey } from '@/lib/db/models/ApiKey';
 import { alphaVantageService } from '@/lib/services/financial-data/alpha-vantage.service';
 import { coinGeckoService } from '@/lib/services/financial-data/coingecko.service';
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    await connectDB();
+    await connectToDatabase();
 
     // Fetch all financial data API keys (including encrypted keys for testing)
     const apiKeys = await ApiKey.find({
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { keyId, checkAll } = body;
 
-    await connectDB();
+    await connectToDatabase();
 
     let keysToCheck;
 
