@@ -78,19 +78,35 @@ export class ClaudeService {
 
       let inputTokens = 0;
       let outputTokens = 0;
+      let contentChunkCount = 0;
 
       for await (const chunk of stream) {
         if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+          contentChunkCount++;
+          // Estimate output tokens (roughly 1 token per 4 characters)
+          const estimatedNewTokens = Math.ceil(chunk.delta.text.length / 4);
+          outputTokens += estimatedNewTokens;
+
+          // Send real-time usage updates during streaming
+          // Update every 5 chunks to avoid overwhelming the client
+          if (onUsage && contentChunkCount % 5 === 0) {
+            onUsage({ inputTokens, outputTokens });
+          }
+
           yield chunk.delta.text;
         } else if (chunk.type === 'message_start') {
           inputTokens = chunk.message.usage.input_tokens;
-          // Send usage update as soon as we get input tokens
+          outputTokens = 0; // Reset output tokens
+          contentChunkCount = 0; // Reset chunk counter
+          // Send initial usage update as soon as we get input tokens
           if (onUsage && inputTokens > 0) {
             onUsage({ inputTokens, outputTokens: 0 });
           }
         } else if (chunk.type === 'message_delta') {
-          outputTokens = chunk.usage.output_tokens;
-          // Send usage update when we get output tokens
+          // Get final accurate token count from API
+          const finalOutputTokens = chunk.usage.output_tokens;
+          outputTokens = finalOutputTokens;
+          // Send final usage update with accurate counts
           if (onUsage) {
             onUsage({ inputTokens, outputTokens });
           }

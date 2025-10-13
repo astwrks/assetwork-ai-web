@@ -233,6 +233,27 @@ USER'S NEW SECTION REQUEST:
 ===========================
 ${prompt}
 
+CHARTS - CRITICAL: NO JAVASCRIPT ALLOWED!
+==========================================
+If creating charts, use ONLY CSS or SVG. Examples:
+
+CSS BAR CHART:
+<div style="display: flex; align-items: flex-end; justify-content: space-around; height: 250px; border-bottom: 2px solid #E9ECEF; gap: 20px;">
+  <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+    <div style="font-weight: 600; color: #1B2951; margin-bottom: 8px;">$2.1M</div>
+    <div style="width: 100%; height: 65%; background: linear-gradient(180deg, #1B2951 0%, #405D80 100%); border-radius: 8px 8px 0 0;"></div>
+    <div style="margin-top: 8px; font-size: 14px; color: #2C3E50;">Q1</div>
+  </div>
+</div>
+
+SVG LINE CHART:
+<svg width="100%" height="250" viewBox="0 0 600 250">
+  <path d="M 0 180 L 100 150 L 200 120 L 300 140 L 400 90 L 500 70 L 600 50" stroke="#1B2951" stroke-width="3" fill="none"/>
+  <circle cx="200" cy="120" r="5" fill="#1B2951"/>
+</svg>
+
+DO NOT use: <script>, <canvas>, Chart.js, D3.js, or any JavaScript libraries!
+
 MANDATORY QUALITY REQUIREMENTS:
 ================================
 1. ✓ Wrap entire section in: <section data-section-id="section_${type}_${position || 'new'}" class="bg-white rounded-xl shadow-sm p-6 md:p-8 space-y-6">
@@ -372,10 +393,14 @@ Generate a professional, visually stunning section now:`;
         }
         await report.save();
 
-        // Send completion event
+        // Get updated usage data for immediate client update
+        const updatedReport = await PlaygroundReport.findById(reportId).select('usage').lean();
+
+        // Send completion event with updated usage
         const completeChunk = `data: ${JSON.stringify({
           type: 'complete',
           section: newSection,
+          usage: updatedReport?.usage || null, // Include usage in completion event
         })}\n\n`;
         await writer.write(encoder.encode(completeChunk));
         await writer.close();

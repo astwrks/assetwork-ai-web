@@ -410,7 +410,8 @@ export default function FinancialPlaygroundPage() {
   const sendMessage = async (messageOverride?: string) => {
     const messageToSend = messageOverride || inputMessage;
 
-    if (!messageToSend.trim() || !currentThread) {
+    // Type guard: ensure messageToSend is a string
+    if (typeof messageToSend !== 'string' || !messageToSend.trim() || !currentThread) {
       if (!currentThread) {
         toast.error('Please create a new conversation first');
       }
@@ -582,6 +583,12 @@ export default function FinancialPlaygroundPage() {
                   });
                   setSectionStreamingState(prev => ({ ...prev, [sectionId]: false }));
                   setEditingContext(null);
+
+                  // Trigger immediate metrics refresh
+                  if (typeof window !== 'undefined' && (window as any).__refreshReportMetrics) {
+                    await (window as any).__refreshReportMetrics();
+                  }
+
                   toast.success('Section updated successfully');
                 } else if (data.type === 'error') {
                   throw new Error(data.error);
@@ -667,6 +674,12 @@ export default function FinancialPlaygroundPage() {
                     setSectionStreamingState(prev => ({ ...prev, [newSectionId!]: false }));
                   }
                   setEditingContext(null);
+
+                  // Trigger immediate metrics refresh
+                  if (typeof window !== 'undefined' && (window as any).__refreshReportMetrics) {
+                    await (window as any).__refreshReportMetrics();
+                  }
+
                   toast.success('Section added successfully');
                 } else if (data.type === 'error') {
                   throw new Error(data.error);

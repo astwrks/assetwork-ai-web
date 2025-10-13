@@ -21,11 +21,13 @@ interface ReportUsage {
 interface ReportMetricsTickerProps {
   reportId: string;
   initialUsage?: ReportUsage;
+  onUsageUpdate?: (usage: ReportUsage) => void; // Callback for parent to know about updates
 }
 
 export default function ReportMetricsTicker({
   reportId,
   initialUsage,
+  onUsageUpdate,
 }: ReportMetricsTickerProps) {
   const [usage, setUsage] = useState<ReportUsage>(
     initialUsage || {
@@ -35,35 +37,65 @@ export default function ReportMetricsTicker({
     }
   );
   const [isAnimating, setIsAnimating] = useState(false);
+  const [pollInterval, setPollInterval] = useState(2000); // Start with 2 seconds
 
-  // Poll for usage updates
+  // Expose a method to trigger immediate refresh (for external calls)
   useEffect(() => {
-    const fetchUsage = async () => {
-      try {
-        const response = await fetch(
-          `/api/playground/reports/${reportId}/usage`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          if (
-            data.usage &&
-            (data.usage.totalTokens !== usage.totalTokens ||
-              data.usage.totalCost !== usage.totalCost)
-          ) {
-            setUsage(data.usage);
-            setIsAnimating(true);
-            setTimeout(() => setIsAnimating(false), 600);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch usage:', error);
+    if (typeof window !== 'undefined') {
+      (window as any).__refreshReportMetrics = async () => {
+        await fetchUsage();
+      };
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete (window as any).__refreshReportMetrics;
       }
     };
+  }, [reportId]);
 
-    // Poll every 2 seconds
-    const interval = setInterval(fetchUsage, 2000);
+  const fetchUsage = async () => {
+    try {
+      const response = await fetch(
+        `/api/playground/reports/${reportId}/usage`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (
+          data.usage &&
+          (data.usage.totalTokens !== usage.totalTokens ||
+            data.usage.totalCost !== usage.totalCost ||
+            data.usage.operations?.length !== usage.operations?.length)
+        ) {
+          setUsage(data.usage);
+          setIsAnimating(true);
+          setTimeout(() => setIsAnimating(false), 600);
+
+          // Notify parent component of update
+          if (onUsageUpdate) {
+            onUsageUpdate(data.usage);
+          }
+
+          // Speed up polling temporarily when changes are detected
+          setPollInterval(500); // Poll every 500ms for the next 10 seconds
+          setTimeout(() => {
+            setPollInterval(2000); // Return to normal 2-second polling
+          }, 10000);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch usage:', error);
+    }
+  };
+
+  // Poll for usage updates with dynamic interval
+  useEffect(() => {
+    // Fetch immediately on mount
+    fetchUsage();
+
+    // Set up polling
+    const interval = setInterval(fetchUsage, pollInterval);
     return () => clearInterval(interval);
-  }, [reportId, usage.totalTokens, usage.totalCost]);
+  }, [reportId, pollInterval]);
 
   const operationCount = usage.operations?.length || 0;
   const avgCostPerOperation =

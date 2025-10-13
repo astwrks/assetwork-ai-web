@@ -16,7 +16,7 @@ const FINANCIAL_REPORT_PROMPT = `You are an expert financial analyst and data vi
 2. Create interactive sections with clear headings and data visualizations
 3. Structure reports with these section types:
    - Key Metrics (display important numbers prominently)
-   - Charts (using Recharts-compatible data structures)
+   - Charts (use CSS-only or SVG charts - NO JavaScript!)
    - Tables (formatted financial data)
    - Analysis Text (insights and recommendations)
    - Critical Insights (highlighted important findings)
@@ -66,7 +66,36 @@ const FINANCIAL_REPORT_PROMPT = `You are an expert financial analyst and data vi
    - For our internal APIs, cite as "Alpha Vantage API" (stocks) or "CoinGecko API" (crypto)
    - Never fabricate data - if data isn't available, clearly state "Data not available"
 
-8. Return ONLY the HTML content, properly structured and styled
+8. OUTPUT FORMAT - ABSOLUTELY CRITICAL - READ THIS CAREFULLY:
+
+   YOUR ENTIRE RESPONSE MUST BE PURE HTML ONLY. NOTHING ELSE.
+
+   ❌ NEVER DO THIS:
+   - "I'll create a dashboard..."
+   - "This dashboard provides..."
+   - Code fence markers (three backticks with html)
+   - Any text before the HTML starts
+   - Any text after the HTML ends
+   - Any explanations or commentary
+
+   ✅ ALWAYS DO THIS:
+   - Start your response IMMEDIATELY with an HTML opening tag like <div
+   - End your response with the closing HTML tag like </div>
+   - NOTHING before the first <
+   - NOTHING after the last >
+
+   Example of CORRECT response format:
+   <div data-section-id="section_text_1" class="report-section mb-6">
+   [rest of HTML content]
+   </div>
+
+   Example of INCORRECT response (DO NOT DO THIS):
+   I'll create a dashboard...
+   (code fence with html)
+   <div>...</div>
+   (code fence end)
+
+   IF YOU ADD ANY TEXT OUTSIDE THE HTML TAGS, YOU WILL BREAK THE SYSTEM.
 
 ASSETWORKS BRAND COLORS (use these exclusively):
 - Primary Navy: #1B2951 (headings, important text, primary buttons)
@@ -131,6 +160,134 @@ DATA SOURCES SECTION (REQUIRED at end of every report):
     </li>
   </ul>
 </div>
+
+CHART SECTIONS (CSS-ONLY - NO JAVASCRIPT):
+
+IMPORTANT: DO NOT use <script>, <canvas>, or any JavaScript libraries (Chart.js, D3, etc.).
+Use PURE CSS and SVG for all charts. Here are working examples:
+
+CSS BAR CHART (Vertical):
+<div data-section-id="section_chart_1" class="report-section mb-6 p-6 bg-white rounded-lg shadow-md">
+  <h3 class="text-xl font-semibold mb-4" style="color: #1B2951;">Revenue by Quarter</h3>
+  <div style="display: flex; align-items: flex-end; justify-content: space-around; height: 250px; border-bottom: 2px solid #E9ECEF; gap: 20px;">
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+      <div style="font-weight: 600; color: #1B2951; margin-bottom: 8px;">$2.1M</div>
+      <div style="width: 100%; height: 65%; background: linear-gradient(180deg, #1B2951 0%, #405D80 100%); border-radius: 8px 8px 0 0;"></div>
+      <div style="margin-top: 8px; font-size: 14px; color: #2C3E50;">Q1</div>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+      <div style="font-weight: 600; color: #1B2951; margin-bottom: 8px;">$2.8M</div>
+      <div style="width: 100%; height: 87%; background: linear-gradient(180deg, #1B2951 0%, #405D80 100%); border-radius: 8px 8px 0 0;"></div>
+      <div style="margin-top: 8px; font-size: 14px; color: #2C3E50;">Q2</div>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+      <div style="font-weight: 600; color: #1B2951; margin-bottom: 8px;">$3.2M</div>
+      <div style="width: 100%; height: 100%; background: linear-gradient(180deg, #1B2951 0%, #405D80 100%); border-radius: 8px 8px 0 0;"></div>
+      <div style="margin-top: 8px; font-size: 14px; color: #2C3E50;">Q3</div>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+      <div style="font-weight: 600; color: #1B2951; margin-bottom: 8px;">$2.9M</div>
+      <div style="width: 100%; height: 91%; background: linear-gradient(180deg, #1B2951 0%, #405D80 100%); border-radius: 8px 8px 0 0;"></div>
+      <div style="margin-top: 8px; font-size: 14px; color: #2C3E50;">Q4</div>
+    </div>
+  </div>
+</div>
+
+CSS HORIZONTAL BAR CHART:
+<div data-section-id="section_chart_2" class="report-section mb-6 p-6 bg-white rounded-lg shadow-md">
+  <h3 class="text-xl font-semibold mb-4" style="color: #1B2951;">Top Products by Sales</h3>
+  <div style="display: flex; flex-direction: column; gap: 16px;">
+    <div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+        <span style="font-weight: 500; color: #2C3E50;">Product A</span>
+        <span style="font-weight: 600; color: #1B2951;">$845K</span>
+      </div>
+      <div style="width: 100%; height: 32px; background: #F8F9FA; border-radius: 8px; overflow: hidden;">
+        <div style="width: 95%; height: 100%; background: linear-gradient(90deg, #1B2951 0%, #405D80 100%); display: flex; align-items: center; justify-content: flex-end; padding-right: 12px; color: white; font-size: 12px; font-weight: 600;">95%</div>
+      </div>
+    </div>
+    <div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+        <span style="font-weight: 500; color: #2C3E50;">Product B</span>
+        <span style="font-weight: 600; color: #1B2951;">$720K</span>
+      </div>
+      <div style="width: 100%; height: 32px; background: #F8F9FA; border-radius: 8px; overflow: hidden;">
+        <div style="width: 81%; height: 100%; background: linear-gradient(90deg, #1B2951 0%, #405D80 100%); display: flex; align-items: center; justify-content: flex-end; padding-right: 12px; color: white; font-size: 12px; font-weight: 600;">81%</div>
+      </div>
+    </div>
+    <div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+        <span style="font-weight: 500; color: #2C3E50;">Product C</span>
+        <span style="font-weight: 600; color: #1B2951;">$520K</span>
+      </div>
+      <div style="width: 100%; height: 32px; background: #F8F9FA; border-radius: 8px; overflow: hidden;">
+        <div style="width: 58%; height: 100%; background: linear-gradient(90deg, #1B2951 0%, #405D80 100%); display: flex; align-items: center; justify-content: flex-end; padding-right: 12px; color: white; font-size: 12px; font-weight: 600;">58%</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+SVG PIE/DONUT CHART:
+<div data-section-id="section_chart_3" class="report-section mb-6 p-6 bg-white rounded-lg shadow-md">
+  <h3 class="text-xl font-semibold mb-4" style="color: #1B2951;">Revenue Distribution</h3>
+  <div style="display: flex; align-items: center; gap: 40px;">
+    <svg width="200" height="200" viewBox="0 0 200 200">
+      <circle cx="100" cy="100" r="90" fill="none" stroke="#1B2951" stroke-width="40" stroke-dasharray="282.74 282.74" transform="rotate(-90 100 100)"/>
+      <circle cx="100" cy="100" r="90" fill="none" stroke="#405D80" stroke-width="40" stroke-dasharray="141.37 424.12" stroke-dashoffset="-282.74" transform="rotate(-90 100 100)"/>
+      <circle cx="100" cy="100" r="90" fill="none" stroke="#6C7B95" stroke-width="40" stroke-dasharray="84.82 519.67" stroke-dashoffset="-424.11" transform="rotate(-90 100 100)"/>
+      <circle cx="100" cy="100" r="40" fill="white"/>
+    </svg>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 16px; height: 16px; background: #1B2951; border-radius: 4px;"></div>
+        <span style="color: #2C3E50;"><strong>Products:</strong> 50%</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 16px; height: 16px; background: #405D80; border-radius: 4px;"></div>
+        <span style="color: #2C3E50;"><strong>Services:</strong> 30%</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 16px; height: 16px; background: #6C7B95; border-radius: 4px;"></div>
+        <span style="color: #2C3E50;"><strong>Other:</strong> 20%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+LINE CHART (SVG):
+<div data-section-id="section_chart_4" class="report-section mb-6 p-6 bg-white rounded-lg shadow-md">
+  <h3 class="text-xl font-semibold mb-4" style="color: #1B2951;">Stock Price Trend</h3>
+  <svg width="100%" height="250" viewBox="0 0 600 250" style="border-bottom: 2px solid #E9ECEF;">
+    <!-- Grid lines -->
+    <line x1="0" y1="50" x2="600" y2="50" stroke="#E9ECEF" stroke-width="1"/>
+    <line x1="0" y1="100" x2="600" y2="100" stroke="#E9ECEF" stroke-width="1"/>
+    <line x1="0" y1="150" x2="600" y2="150" stroke="#E9ECEF" stroke-width="1"/>
+    <line x1="0" y1="200" x2="600" y2="200" stroke="#E9ECEF" stroke-width="1"/>
+
+    <!-- Line chart path -->
+    <path d="M 0 180 L 100 150 L 200 120 L 300 140 L 400 90 L 500 70 L 600 50"
+          stroke="#1B2951" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Data points -->
+    <circle cx="0" cy="180" r="5" fill="#1B2951"/>
+    <circle cx="100" cy="150" r="5" fill="#1B2951"/>
+    <circle cx="200" cy="120" r="5" fill="#1B2951"/>
+    <circle cx="300" cy="140" r="5" fill="#1B2951"/>
+    <circle cx="400" cy="90" r="5" fill="#1B2951"/>
+    <circle cx="500" cy="70" r="5" fill="#1B2951"/>
+    <circle cx="600" cy="50" r="5" fill="#1B2951"/>
+
+    <!-- Labels -->
+    <text x="0" y="235" fill="#2C3E50" font-size="12" text-anchor="middle">Jan</text>
+    <text x="100" y="235" fill="#2C3E50" font-size="12" text-anchor="middle">Feb</text>
+    <text x="200" y="235" fill="#2C3E50" font-size="12" text-anchor="middle">Mar</text>
+    <text x="300" y="235" fill="#2C3E50" font-size="12" text-anchor="middle">Apr</text>
+    <text x="400" y="235" fill="#2C3E50" font-size="12" text-anchor="middle">May</text>
+    <text x="500" y="235" fill="#2C3E50" font-size="12" text-anchor="middle">Jun</text>
+  </svg>
+</div>
+
+Use these exact patterns for all charts. Adjust heights/widths/percentages based on your data. NEVER use JavaScript.
 
 Use these styles consistently throughout all generated reports.`;
 
@@ -307,6 +464,9 @@ export async function POST(
         const endTime = Date.now();
         const duration = endTime - startTime;
 
+        // Clean up any non-HTML text that the AI might have added
+        accumulatedContent = cleanHtmlContent(accumulatedContent);
+
         // Parse HTML to extract sections and insights
         const sections = extractSections(accumulatedContent);
         const insights = extractInsights(accumulatedContent);
@@ -393,6 +553,26 @@ export async function POST(
     console.error('Error in messages endpoint:', error);
     return new Response('Internal server error', { status: 500 });
   }
+}
+
+// Helper function to clean HTML content by removing explanatory text
+function cleanHtmlContent(content: string): string {
+  // Remove any text before the first HTML tag
+  const firstTagIndex = content.indexOf('<');
+  if (firstTagIndex > 0) {
+    content = content.substring(firstTagIndex);
+  }
+
+  // Remove any text after the last HTML closing tag
+  const lastTagIndex = content.lastIndexOf('>');
+  if (lastTagIndex > 0 && lastTagIndex < content.length - 1) {
+    content = content.substring(0, lastTagIndex + 1);
+  }
+
+  // Remove ```html and ``` code fence markers if present
+  content = content.replace(/^```html\s*/i, '').replace(/\s*```$/,  '');
+
+  return content.trim();
 }
 
 // Helper function to extract sections from HTML

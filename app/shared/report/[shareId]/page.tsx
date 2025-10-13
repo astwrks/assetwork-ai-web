@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation';
-import { prisma } from '@/lib/db/prisma';
+import { connectToDatabase } from '@/lib/db/mongodb';
+import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
+import Thread from '@/lib/db/models/Thread';
 import { TrendingUp, Calendar, User, Globe } from 'lucide-react';
 import './shared-report.css';
 
@@ -14,18 +16,12 @@ interface PageProps {
 export default async function SharedReportPage({ params }: PageProps) {
   const { shareId } = await params;
 
-  // Find report by shareId using Prisma
-  const report = await prisma.playgroundReport.findFirst({
-    where: {
-      publicShare: {
-        path: ['shareId'],
-        equals: shareId,
-      },
-    },
-    include: {
-      thread: true,
-    },
-  });
+  await connectToDatabase();
+
+  // Find report by shareId using MongoDB
+  const report = await PlaygroundReport.findOne({
+    'publicShare.shareId': shareId,
+  }).lean();
 
   if (!report) {
     notFound();
@@ -41,7 +37,8 @@ export default async function SharedReportPage({ params }: PageProps) {
     notFound();
   }
 
-  const thread = report.thread;
+  // Fetch thread separately
+  const thread = await Thread.findById(report.threadId).lean();
 
   const createdDate = new Date(publicShare?.createdAt || report.createdAt).toLocaleDateString('en-US', {
     year: 'numeric',

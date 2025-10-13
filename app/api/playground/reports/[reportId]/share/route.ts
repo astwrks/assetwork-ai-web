@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { prisma } from '@/lib/db/prisma';
+import { connectToDatabase } from '@/lib/db/mongodb';
+import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
+import Thread from '@/lib/db/models/Thread';
 import { nanoid } from 'nanoid';
 
 // Force dynamic rendering for this route
@@ -17,25 +19,27 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    await connectToDatabase();
+
     const { reportId } = await params;
 
-    // Fetch report with thread
-    const report = await prisma.playgroundReport.findUnique({
-      where: { id: reportId },
-      include: { thread: true },
-    });
+    // Fetch report
+    const report = await PlaygroundReport.findById(reportId);
 
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
-    if (!report.thread) {
+    // Fetch thread
+    const thread = await Thread.findById(report.threadId);
+
+    if (!thread) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
     // Check access permissions
-    const isOwner = report.thread.userId === session.user.email;
-    const sharedWith = (report.thread.sharedWith || []) as any[];
+    const isOwner = thread.userId === session.user.email;
+    const sharedWith = thread.sharedWith || [];
     const hasAccess = sharedWith.some(
       (share: any) => share.userId === session.user.email
     );
@@ -58,19 +62,16 @@ export async function POST(
     const shareId = nanoid(12);
 
     // Update report with public share info
-    await prisma.playgroundReport.update({
-      where: { id: reportId },
-      data: {
-        publicShare: {
-          shareId,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          createdBy: session.user.email,
-          // Optional: Set expiration (e.g., 30 days)
-          // expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      },
-    });
+    report.publicShare = {
+      shareId,
+      isActive: true,
+      createdAt: new Date(),
+      createdBy: session.user.email,
+      // Optional: Set expiration (e.g., 30 days)
+      // expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    };
+
+    await report.save();
 
     return NextResponse.json({
       success: true,
@@ -97,39 +98,37 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    await connectToDatabase();
+
     const { reportId } = await params;
 
-    // Fetch report with thread
-    const report = await prisma.playgroundReport.findUnique({
-      where: { id: reportId },
-      include: { thread: true },
-    });
+    // Fetch report
+    const report = await PlaygroundReport.findById(reportId);
 
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
-    if (!report.thread) {
+    // Fetch thread
+    const thread = await Thread.findById(report.threadId);
+
+    if (!thread) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
     // Only owner can revoke share
-    if (report.thread.userId !== session.user.email) {
+    if (thread.userId !== session.user.email) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     // Deactivate public share
     const publicShare = report.publicShare as any;
     if (publicShare) {
-      await prisma.playgroundReport.update({
-        where: { id: reportId },
-        data: {
-          publicShare: {
-            ...publicShare,
-            isActive: false,
-          },
-        },
-      });
+      report.publicShare = {
+        ...publicShare,
+        isActive: false,
+      };
+      await report.save();
     }
 
     return NextResponse.json({
