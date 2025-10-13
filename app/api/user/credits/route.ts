@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import User from '@/lib/db/models/User';
+import { prisma } from '@/lib/db/prisma';
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -15,9 +14,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await connectToDatabase();
-
-    const user = await User.findById(session.user.id).select('aiCredits plan');
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        aiCredits: true,
+        plan: true
+      },
+    });
 
     if (!user) {
       return NextResponse.json(

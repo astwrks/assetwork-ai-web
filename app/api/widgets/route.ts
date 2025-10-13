@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import Widget from '@/lib/db/models/Widget';
+import { prisma } from '@/lib/db/prisma';
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -15,26 +14,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await connectToDatabase();
-
-    const widgets = await Widget.find({ userId: session.user.id })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
+    const widgets = await prisma.widget.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
 
     return NextResponse.json({
       success: true,
-      widgets: widgets.map(widget => ({
-        id: widget._id,
-        title: widget.title,
-        type: widget.type,
-        data: widget.data,
-        chartConfig: widget.chartConfig,
-        settings: widget.settings,
-        createdAt: widget.createdAt,
-        views: widget.views || 0,
-        likes: widget.likes?.length || 0,
-      })),
+      widgets: widgets.map(widget => {
+        const config = widget.config as any;
+        return {
+          id: widget.id,
+          title: widget.title,
+          type: widget.type,
+          data: config?.data || {},
+          chartConfig: config?.chartConfig || {},
+          settings: config?.settings || {},
+          createdAt: widget.createdAt.toISOString(),
+          views: config?.views || 0,
+          likes: config?.likes || 0,
+        };
+      }),
     });
   } catch (error) {
     console.error('Failed to fetch widgets:', error);
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -59,30 +60,35 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { title, type, data, chartConfig, settings, query } = body;
 
-    if (!title || !type || !data) {
+    if (!title || !type) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    await connectToDatabase();
-
-    const widget = await Widget.create({
-      userId: session.user.id,
-      title,
-      type,
-      data,
-      chartConfig,
-      settings,
-      query,
-      isPublic: false,
+    const widget = await prisma.widget.create({
+      data: {
+        userId: session.user.id,
+        title,
+        type,
+        config: {
+          data: data || {},
+          chartConfig: chartConfig || {},
+          settings: settings || {},
+          query: query || '',
+          views: 0,
+          likes: 0,
+        },
+        position: { x: 0, y: 0, w: 4, h: 3 },
+        isVisible: true,
+      },
     });
 
     return NextResponse.json({
       success: true,
       widget: {
-        id: widget._id,
+        id: widget.id,
         title: widget.title,
         type: widget.type,
       },
