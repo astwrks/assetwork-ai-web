@@ -7,7 +7,7 @@ import Thread from '@/lib/db/models/Thread';
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || 'active';
     const isTemplate = searchParams.get('isTemplate') === 'true';
 
-    const query: any = { userId: session.user.email };
+    const query: any = { userId: session.user.id };
     if (status) query.status = status;
     if (isTemplate !== null) query.isTemplate = isTemplate;
 
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     // Create new thread
     const thread = new Thread({
-      userId: session.user.email,
+      userId: session.user.id,
       title: title.trim(),
       description: description?.trim(),
       status: 'active',
