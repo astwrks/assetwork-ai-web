@@ -52,6 +52,7 @@ import InteractiveSection from '@/components/financial-playground/InteractiveSec
 import EditingContext from '@/components/financial-playground/EditingContext';
 import AddSectionButton from '@/components/financial-playground/AddSectionButton';
 import ReportMetricsTicker from '@/components/financial-playground/ReportMetricsTicker';
+import ShareDialog from '@/components/financial-playground/ShareDialog';
 
 interface Thread {
   _id: string;
