@@ -70,6 +70,8 @@ import CommandPalette from '@/components/financial-playground/CommandPalette';
 import ReportDisplay from '@/components/financial-playground/ReportDisplay';
 import StreamingProgress from '@/components/financial-playground/StreamingProgress';
 import EditingContext from '@/components/financial-playground/EditingContext';
+import TemplateCard from '@/components/financial-playground/TemplateCard';
+import TemplateDetailDialog from '@/components/financial-playground/TemplateDetailDialog';
 import {
   Dialog,
   DialogContent,
@@ -77,6 +79,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ITemplate } from '@/lib/db/models/Template';
 
 // SWR fetcher
 const fetcher = async (url: string) => {
@@ -176,6 +179,11 @@ export default function FinancialPlaygroundV2() {
   const [showDataImport, setShowDataImport] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
 
+  // Template state
+  const [selectedTemplate, setSelectedTemplate] = useState<ITemplate | null>(null);
+  const [showTemplateDetail, setShowTemplateDetail] = useState(false);
+  const [isCreatingFromTemplate, setIsCreatingFromTemplate] = useState(false);
+
   // Streaming progress state
   const [streamingStage, setStreamingStage] = useState('');
 
@@ -222,8 +230,62 @@ export default function FinancialPlaygroundV2() {
     }
   );
 
+  // Fetch templates
+  const { data: templatesData, error: templatesError, mutate: mutateTemplates } = useSWR(
+    session?.user ? '/api/playground/templates' : null,
+    fetcher
+  );
+
   const threads = threadsData?.threads || [];
   const messages = messagesData?.messages || [];
+  const templates = templatesData?.templates || [];
+
+  // Handle URL-based thread routing
+  useEffect(() => {
+    if (threads.length === 0 || !session) return;
+
+    const threadIdFromUrl = searchParams.get('thread');
+
+    if (threadIdFromUrl) {
+      // Load thread from URL parameter
+      const thread = threads.find(t => t._id === threadIdFromUrl);
+      if (thread && (!activeThread || activeThread._id !== threadIdFromUrl)) {
+        console.log('🔗 Loading thread from URL:', threadIdFromUrl);
+        setActiveThread(thread);
+        // Save to localStorage
+        if (session?.user?.email) {
+          localStorage.setItem(`playground_v2_last_thread_${session.user.email}`, threadIdFromUrl);
+        }
+      }
+    } else if (!activeThread) {
+      // No URL parameter and no active thread - load last opened thread
+      if (session?.user?.email) {
+        const lastThreadId = localStorage.getItem(`playground_v2_last_thread_${session.user.email}`);
+        if (lastThreadId) {
+          const thread = threads.find(t => t._id === lastThreadId);
+          if (thread) {
+            console.log('💾 Restoring last thread from localStorage:', lastThreadId);
+            setActiveThread(thread);
+            // Update URL without reload
+            router.replace(`/financial-playground-v2?thread=${lastThreadId}`, { scroll: false });
+          }
+        }
+      }
+    }
+  }, [threads, searchParams, session, activeThread, router]);
+
+  // Update URL when active thread changes
+  useEffect(() => {
+    if (activeThread && session?.user?.email) {
+      // Update URL to reflect current thread
+      const currentUrlThreadId = searchParams.get('thread');
+      if (currentUrlThreadId !== activeThread._id) {
+        router.replace(`/financial-playground-v2?thread=${activeThread._id}`, { scroll: false });
+      }
+      // Save to localStorage
+      localStorage.setItem(`playground_v2_last_thread_${session.user.email}`, activeThread._id);
+    }
+  }, [activeThread, session, router, searchParams]);
 
   // Auto-switch to report mode when a report exists
   useEffect(() => {
@@ -755,6 +817,15 @@ export default function FinancialPlaygroundV2() {
 
       const data = await response.json();
       setActiveThread(data.thread);
+
+      // Update URL to new thread
+      router.replace(`/financial-playground-v2?thread=${data.thread._id}`, { scroll: false });
+
+      // Save to localStorage
+      if (session?.user?.email) {
+        localStorage.setItem(`playground_v2_last_thread_${session.user.email}`, data.thread._id);
+      }
+
       mutateThreads();
       toast.success('New thread created!');
       return data.thread;
@@ -763,12 +834,36 @@ export default function FinancialPlaygroundV2() {
       toast.error('Failed to create thread');
       return null;
     }
-  }, [mutateThreads]);
+  }, [mutateThreads, router, session]);
 
-  const handleThreadClick = (thread: Thread) => {
+  const handleThreadClick = useCallback((thread: Thread) => {
     setActiveThread(thread);
+    // Update URL
+    router.replace(`/financial-playground-v2?thread=${thread._id}`, { scroll: false });
+    // Save to localStorage
+    if (session?.user?.email) {
+      localStorage.setItem(`playground_v2_last_thread_${session.user.email}`, thread._id);
+    }
     // Messages will be automatically fetched by SWR when activeThread changes
-  };
+  }, [router, session]);
+
+  const handleShareThread = useCallback(async () => {
+    if (!activeThread) {
+      toast.error('No active thread to share');
+      return;
+    }
+
+    try {
+      const threadUrl = `${window.location.origin}/financial-playground-v2/${activeThread._id}`;
+      await navigator.clipboard.writeText(threadUrl);
+      toast.success('Thread URL copied to clipboard!');
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      // Fallback for browsers that don't support clipboard API
+      const threadUrl = `${window.location.origin}/financial-playground-v2/${activeThread._id}`;
+      toast.success(`Share this URL: ${threadUrl}`);
+    }
+  }, [activeThread]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -802,6 +897,76 @@ export default function FinancialPlaygroundV2() {
       toast.success('Report exported successfully!');
     }, 2000);
   };
+
+  // Template handlers
+  const handleTemplatePreview = useCallback((template: ITemplate) => {
+    console.log('👁️ Preview template:', template.name);
+    setSelectedTemplate(template);
+    setShowTemplateDetail(true);
+  }, []);
+
+  const handleTemplateUse = useCallback(async (template: ITemplate) => {
+    console.log('📋 Using template:', template.name);
+    setIsCreatingFromTemplate(true);
+
+    try {
+      // Call the "use template" API endpoint
+      const response = await fetch(`/api/playground/templates/${template._id}/use`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customTitle: `${template.name} - ${new Date().toLocaleDateString()}`,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 402) {
+          // Premium template without subscription
+          toast.error(`This is a ${errorData.tier} template. Please upgrade your subscription.`);
+          return;
+        }
+        throw new Error(errorData.error || 'Failed to create thread from template');
+      }
+
+      const data = await response.json();
+
+      // Close dialogs first (before state changes)
+      setShowTemplates(false);
+      setShowTemplateDetail(false);
+      setSelectedTemplate(null);
+
+      // Save to localStorage (doesn't trigger re-render)
+      if (session?.user?.email) {
+        localStorage.setItem(`playground_v2_last_thread_${session.user.email}`, data.thread._id);
+      }
+
+      // Set the new thread as active
+      // NOTE: The useEffect watching activeThread will handle URL update automatically
+      // so we don't need to call router.replace() here
+      setActiveThread(data.thread);
+
+      // Refresh threads list in background (optimistic update)
+      mutateThreads();
+
+      // Show success message
+      toast.success(
+        <div>
+          <p className="font-medium">Report created from template!</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Using: {template.name}
+          </p>
+        </div>
+      );
+
+      console.log('✅ Thread created successfully from template');
+    } catch (error) {
+      console.error('❌ Error creating thread from template:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create report from template');
+    } finally {
+      setIsCreatingFromTemplate(false);
+    }
+  }, [router, session, mutateThreads]);
 
   // Redirect if not authenticated
   if (status === 'loading') {
@@ -1128,7 +1293,12 @@ export default function FinancialPlaygroundV2() {
                     <Star className="w-4 h-4 mr-1.5" />
                     <span className="text-sm">Star</span>
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-8 hover:bg-gray-100">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 hover:bg-gray-100"
+                    onClick={handleShareThread}
+                  >
                     <Users className="w-4 h-4 mr-1.5" />
                     <span className="text-sm">Share</span>
                   </Button>
@@ -1612,46 +1782,58 @@ export default function FinancialPlaygroundV2() {
           </DialogContent>
         </Dialog>
 
-        {/* Templates Modal */}
-        <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
-          <DialogContent className="max-w-4xl max-h-[80vh]">
+        {/* Templates Modal - NEW */}
+        <Dialog open={showTemplates} onOpenChange={(open) => {
+          setShowTemplates(open);
+          if (!open) {
+            // Clean up when closing
+            setSelectedTemplate(null);
+            setShowTemplateDetail(false);
+          }
+        }}>
+          <DialogContent className="max-w-6xl max-h-[85vh]">
             <DialogHeader>
               <DialogTitle>Report Templates</DialogTitle>
               <DialogDescription>
-                Choose a template to start your financial report
+                Browse and preview professional report templates. Click any template to see details.
               </DialogDescription>
             </DialogHeader>
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { title: 'Quarterly Earnings', icon: DollarSign, description: 'Comprehensive quarterly financial report' },
-                  { title: 'Cash Flow Analysis', icon: TrendingUp, description: 'Track money movement in and out' },
-                  { title: 'Revenue Forecast', icon: BarChart3, description: 'Project future revenue trends' },
-                  { title: 'Expense Breakdown', icon: PieChart, description: 'Detailed expense categorization' },
-                  { title: 'YoY Comparison', icon: Calculator, description: 'Year-over-year performance metrics' },
-                  { title: 'Market Overview', icon: TrendingUp, description: 'Market trends and analysis' },
-                ].map((template) => (
-                  <Button
-                    key={template.title}
-                    variant="outline"
-                    className="h-auto p-4 justify-start"
-                    onClick={() => {
-                      handleCreateNewThread(template.title);
-                      setShowTemplates(false);
-                      toast.success(`Created new report from ${template.title} template`);
-                    }}
-                  >
-                    <template.icon className="w-8 h-8 mr-3 flex-shrink-0" />
-                    <div className="text-left">
-                      <p className="font-medium">{template.title}</p>
-                      <p className="text-xs text-muted-foreground">{template.description}</p>
-                    </div>
-                  </Button>
-                ))}
-              </div>
+            <ScrollArea className="h-[500px] pr-4">
+              {templates.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <FileText className="w-16 h-16 text-muted-foreground/30 mb-4" />
+                  <p className="text-muted-foreground mb-2">No templates available</p>
+                  <p className="text-sm text-muted-foreground/70">
+                    Templates will appear here once they're created
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {templates.map((template: ITemplate) => (
+                    <TemplateCard
+                      key={template._id}
+                      template={template}
+                      onPreview={handleTemplatePreview}
+                      onUse={handleTemplateUse}
+                    />
+                  ))}
+                </div>
+              )}
             </ScrollArea>
           </DialogContent>
         </Dialog>
+
+        {/* Template Detail Dialog - NEW */}
+        <TemplateDetailDialog
+          template={selectedTemplate}
+          open={showTemplateDetail}
+          onClose={() => {
+            setShowTemplateDetail(false);
+            setSelectedTemplate(null);
+          }}
+          onUse={handleTemplateUse}
+          isLoading={isCreatingFromTemplate}
+        />
 
         {/* Streaming Progress Indicator */}
         <StreamingProgress

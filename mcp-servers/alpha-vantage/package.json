@@ -1,0 +1,22 @@
+{
+  "name": "@assetworks/alpha-vantage-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Alpha Vantage financial data integration",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "axios": "^1.7.9"
+  },
+  "keywords": [
+    "mcp",
+    "alpha-vantage",
+    "stocks",
+    "financial-data"
+  ],
+  "author": "AssetWorks",
+  "license": "MIT"
+}

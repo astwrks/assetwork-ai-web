@@ -22,6 +22,11 @@ export interface ITemplate {
   usageCount: number; // Track popularity
   sourceThreadId?: string; // If created from an existing thread
   previewImageUrl?: string;
+  isPremium: boolean; // Whether this template requires premium subscription
+  tier: 'free' | 'pro' | 'enterprise'; // Template tier
+  rating: number; // Average rating (0-5)
+  ratingCount: number; // Number of ratings
+  icon?: string; // Icon identifier (lucide icon name)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -105,6 +110,32 @@ const TemplateSchema = new mongoose.Schema<ITemplate>(
       index: true,
     },
     previewImageUrl: String,
+    isPremium: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    tier: {
+      type: String,
+      enum: ['free', 'pro', 'enterprise'],
+      default: 'free',
+      index: true,
+    },
+    rating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    ratingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    icon: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true,
@@ -116,6 +147,8 @@ TemplateSchema.index({ userId: 1, createdAt: -1 }); // User's templates
 TemplateSchema.index({ isPublic: 1, usageCount: -1 }); // Popular public templates
 TemplateSchema.index({ isPublic: 1, category: 1 }); // Browse by category
 TemplateSchema.index({ tags: 1, isPublic: 1 }); // Search by tags
+TemplateSchema.index({ isPublic: 1, tier: 1, rating: -1 }); // Browse by tier and rating
+TemplateSchema.index({ isPremium: 1, isPublic: 1 }); // Filter premium templates
 
 // Text index for search functionality
 TemplateSchema.index({ name: 'text', description: 'text', tags: 'text' });

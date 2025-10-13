@@ -878,6 +878,25 @@ export default function FinancialPlaygroundPage() {
     thread.title.toLowerCase().includes(threadSearchQuery.toLowerCase())
   );
 
+  // Handle sharing thread URL
+  const handleShareThread = async () => {
+    if (!currentThread) {
+      toast.error('No active thread to share');
+      return;
+    }
+
+    try {
+      const threadUrl = `${window.location.origin}/financial-playground/${currentThread._id}`;
+      await navigator.clipboard.writeText(threadUrl);
+      toast.success('Thread URL copied to clipboard!');
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      // Fallback for browsers that don't support clipboard API
+      const threadUrl = `${window.location.origin}/financial-playground/${currentThread._id}`;
+      toast.success(`Share this URL: ${threadUrl}`);
+    }
+  };
+
   if (status === 'loading') {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -910,11 +929,21 @@ export default function FinancialPlaygroundPage() {
             <Settings className="w-4 h-4 mr-2" />
             Settings
           </Button>
-          <Button variant="outline" size="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleShareThread}
+            disabled={!currentThread}
+          >
             <Share2 className="w-4 h-4 mr-2" />
             Share
           </Button>
-          <Button variant="outline" size="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportPDF}
+            disabled={!currentReport}
+          >
             <Download className="w-4 h-4 mr-2" />
             Export PDF
           </Button>
@@ -1200,9 +1229,9 @@ export default function FinancialPlaygroundPage() {
                     <div className="border-t border-gray-100 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
-                        <span className="text-xs font-medium text-gray-600">AI Mode:</span>
+                        <span className="text-xs font-medium text-gray-600 whitespace-nowrap">AI Mode:</span>
                         <Select value={activeSystemPromptId} onValueChange={switchSystemPrompt}>
-                          <SelectTrigger className="flex-1 h-8 text-xs">
+                          <SelectTrigger className="flex-1 h-8 text-xs min-w-0">
                             <SelectValue placeholder="Select a prompt" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1212,12 +1241,7 @@ export default function FinancialPlaygroundPage() {
                                 value={prompt.id}
                                 className="text-xs"
                               >
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{prompt.name}</span>
-                                  <span className="text-[10px] text-gray-500 mt-0.5">
-                                    {prompt.description}
-                                  </span>
-                                </div>
+                                {prompt.name}
                               </SelectItem>
                             ))}
                           </SelectContent>

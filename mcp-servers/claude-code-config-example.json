@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "alpha-vantage": {
+      "command": "node",
+      "args": [
+        "/Users/Victor/Projects/AssetWorks/assetworks-webapp/mcp-servers/alpha-vantage/index.js"
+      ],
+      "env": {
+        "ALPHA_VANTAGE_API_KEY": "LEVD3ETXGV1LT8WM"
+      }
+    },
+    "coingecko": {
+      "command": "node",
+      "args": [
+        "/Users/Victor/Projects/AssetWorks/assetworks-webapp/mcp-servers/coingecko/index.js"
+      ]
+    }
+  }
+}

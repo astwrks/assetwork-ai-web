@@ -1,0 +1,23 @@
+{
+  "name": "@assetworks/coingecko-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for CoinGecko cryptocurrency data integration",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "axios": "^1.7.9"
+  },
+  "keywords": [
+    "mcp",
+    "coingecko",
+    "cryptocurrency",
+    "bitcoin",
+    "ethereum"
+  ],
+  "author": "AssetWorks",
+  "license": "MIT"
+}

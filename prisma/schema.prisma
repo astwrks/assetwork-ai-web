@@ -1,0 +1,399 @@
+// Prisma schema for AssetWorks - Neon PostgreSQL
+// This schema migrates from MongoDB to PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// User Model
+// ============================================
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String?
+  name      String
+  avatar    String?
+  image     String?
+  bio       String?  @db.VarChar(500)
+  aiCredits Int      @default(100)
+  credits   Int      @default(100)
+  plan      UserPlan @default(FREE)
+  googleId  String?  @unique
+
+  // Social features
+  isPublic  Boolean  @default(true)
+
+  // Following/Followers relationships
+  following      User[]  @relation("UserFollows")
+  followedBy     User[]  @relation("UserFollows")
+
+  // UI preferences
+  theme     Theme   @default(SYSTEM)
+
+  // Notification settings (embedded JSON)
+  notificationSettings Json @default("{\"email\":true,\"push\":true,\"updates\":true}")
+
+  // General preferences (embedded JSON)
+  preferences Json? @default("{\"theme\":\"system\",\"language\":\"en\",\"timezone\":\"UTC\",\"notifications\":{\"email\":true,\"push\":true,\"marketing\":false}}")
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  threads       Thread[]
+  messages      Message[]
+  templates     Template[]
+  apiKeys       ApiKey[]
+  reports       Report[]
+  queries       Query[]
+  widgets       Widget[]
+  settings      PlaygroundSettings[]
+
+  @@index([email])
+  @@index([plan])
+  @@index([createdAt])
+  @@map("users")
+}
+
+// ============================================
+// Thread Model (Financial Playground)
+// ============================================
+model Thread {
+  id          String       @id @default(cuid())
+  userId      String
+  title       String       @db.VarChar(200)
+  description String?      @db.VarChar(1000)
+  status      ThreadStatus @default(ACTIVE)
+
+  // Report management
+  currentReportId String?
+  reportVersions  String[] @default([])
+
+  // Sharing
+  sharedWith Json[] @default([]) // Array of {userId, permission, sharedAt}
+
+  // Template features
+  isTemplate          Boolean @default(false)
+  templateName        String? @db.VarChar(200)
+  templateDescription String? @db.VarChar(1000)
+
+  // Metadata (flexible JSON for template info, etc)
+  metadata Json? @default("{}")
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([userId, isTemplate])
+  @@index([status])
+  @@index([isTemplate])
+  @@map("threads")
+}
+
+// ============================================
+// Message Model (Conversation Messages)
+// ============================================
+model Message {
+  id       String      @id @default(cuid())
+  threadId String
+  userId   String
+  role     MessageRole
+  content  String      @db.Text
+  reportId String?
+
+  // AI metadata (flexible JSON)
+  metadata Json? @default("{}")
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@index([userId])
+  @@index([reportId])
+  @@map("messages")
+}
+
+// ============================================
+// Template Model (Report Templates)
+// ============================================
+model Template {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String   @db.VarChar(200)
+  description String?  @db.VarChar(1000)
+  category    String?
+  tags        String[] @default([])
+
+  // Template structure (array of section definitions)
+  structure Json // Array of {type, title, description, defaultConfig, required, order}
+
+  // Generation
+  basePrompt String?  @db.Text
+
+  // Visibility & usage
+  isPublic    Boolean @default(false)
+  usageCount  Int     @default(0)
+
+  // Source & preview
+  sourceThreadId   String?
+  previewImageUrl  String?
+
+  // Premium features
+  isPremium   Boolean      @default(false)
+  tier        TemplateTier @default(FREE)
+  rating      Float        @default(0)
+  ratingCount Int          @default(0)
+  icon        String?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([isPublic, usageCount(sort: Desc)])
+  @@index([isPublic, category])
+  @@index([isPublic, tier, rating(sort: Desc)])
+  @@index([isPremium, isPublic])
+  @@index([tags])
+  @@map("templates")
+}
+
+// ============================================
+// Report Model (Generated Financial Reports)
+// ============================================
+model Report {
+  id          String   @id @default(cuid())
+  userId      String
+  threadId    String?
+  title       String   @db.VarChar(300)
+  description String?  @db.Text
+
+  // Report content
+  htmlContent String   @db.Text
+
+  // Report structure
+  version     Int      @default(1)
+  status      ReportStatus @default(DRAFT)
+
+  // Metadata
+  metadata    Json?    @default("{}")
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sections ReportSection[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([threadId])
+  @@index([status])
+  @@map("reports")
+}
+
+// ============================================
+// ReportSection Model (Interactive Sections)
+// ============================================
+model ReportSection {
+  id          String        @id @default(cuid())
+  reportId    String
+  type        SectionType
+  title       String        @db.VarChar(300)
+  htmlContent String        @db.Text
+  order       Int
+  version     Int           @default(1)
+
+  // Edit history (JSON array)
+  editHistory Json[] @default([])
+
+  // Metadata
+  metadata    Json?  @default("{}")
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, order])
+  @@map("report_sections")
+}
+
+// ============================================
+// ApiKey Model (Encrypted API Keys)
+// ============================================
+model ApiKey {
+  id            String      @id @default(cuid())
+  userId        String
+  provider      ApiProvider
+  keyName       String      @db.VarChar(100)
+  encryptedKey  String      @db.Text
+  isActive      Boolean     @default(true)
+  lastUsedAt    DateTime?
+  usageCount    Int         @default(0)
+
+  // Timestamps
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider, keyName])
+  @@index([userId, provider])
+  @@index([isActive])
+  @@map("api_keys")
+}
+
+// ============================================
+// Query Model (AI Query History)
+// ============================================
+model Query {
+  id         String      @id @default(cuid())
+  userId     String
+  query      String      @db.Text
+  response   String      @db.Text
+  provider   String?
+  model      String?
+
+  // Tokens & cost
+  tokensUsed Int?
+  cost       Float?
+
+  // Metadata
+  metadata   Json?       @default("{}")
+
+  // Timestamps
+  createdAt  DateTime    @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("queries")
+}
+
+// ============================================
+// Widget Model (Dashboard Widgets)
+// ============================================
+model Widget {
+  id        String      @id @default(cuid())
+  userId    String
+  type      String      @db.VarChar(50)
+  title     String      @db.VarChar(200)
+  config    Json        @default("{}")
+  position  Json        @default("{\"x\":0,\"y\":0,\"w\":4,\"h\":3}")
+  isVisible Boolean     @default(true)
+
+  // Timestamps
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("widgets")
+}
+
+// ============================================
+// PlaygroundSettings Model
+// ============================================
+model PlaygroundSettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  defaultModel     String?  @db.VarChar(100)
+  defaultProvider  String?  @db.VarChar(50)
+  autoSave         Boolean  @default(true)
+
+  // Settings (flexible JSON)
+  settings         Json     @default("{}")
+
+  // Timestamps
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("playground_settings")
+}
+
+// ============================================
+// Enums
+// ============================================
+enum UserPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum ThreadStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum TemplateTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum ReportStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SectionType {
+  METRIC
+  CHART
+  TABLE
+  TEXT
+  INSIGHT
+  CUSTOM
+  IMAGE
+}
+
+enum ApiProvider {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  COINGECKO
+  ALPHA_VANTAGE
+}

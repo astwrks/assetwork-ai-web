@@ -18,6 +18,12 @@ export interface IThread {
   isTemplate: boolean;
   templateName?: string;
   templateDescription?: string;
+  metadata?: {
+    sourceTemplateId?: string;
+    templateStructure?: any[];
+    basePrompt?: string;
+    [key: string]: any;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -91,6 +97,10 @@ const ThreadSchema = new mongoose.Schema<IThread>(
       type: String,
       trim: true,
       maxlength: 1000,
+    },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
   },
   {
