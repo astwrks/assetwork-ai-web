@@ -19,9 +19,10 @@ if (!global.mongoose) {
 }
 
 export async function connectToDatabase() {
-  // Return early if MongoDB URI is not configured (during migration to PostgreSQL)
+  // Silently skip if MongoDB URI is not configured
   if (!MONGODB_URI) {
-    throw new Error('MongoDB URI not configured. Please use PostgreSQL instead.');
+    console.warn('MongoDB URI not configured. Using PostgreSQL instead.');
+    return null;
   }
 
   if (cached.conn) {
