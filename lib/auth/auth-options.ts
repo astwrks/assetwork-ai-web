@@ -1,10 +1,9 @@
 import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
-// import CredentialsProvider from 'next-auth/providers/credentials';
+import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/db/prisma';
-// import { connectToDatabase } from '@/lib/db/mongodb';
-// import User from '@/lib/db/models/User';
+import { comparePassword } from './password';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -21,9 +20,6 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
-    // Credentials provider disabled for Netlify deployment
-    // Re-enable once MongoDB is fully migrated to PostgreSQL
-    /*
     CredentialsProvider({
       name: 'credentials',
       credentials: {
@@ -35,29 +31,41 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Invalid credentials');
         }
 
-        await connectToDatabase();
-
-        const user = await User.findOne({ email: credentials.email }).select('+password');
+        // Find user in PostgreSQL using Prisma
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email },
+          select: {
+            id: true,
+            email: true,
+            password: true,
+            name: true,
+            image: true,
+          },
+        });
 
         if (!user || !user.password) {
           throw new Error('User not found');
         }
 
-        const isPasswordValid = await user.comparePassword(credentials.password);
+        // Compare password using bcrypt
+        const isPasswordValid = await comparePassword(
+          credentials.password,
+          user.password
+        );
 
         if (!isPasswordValid) {
           throw new Error('Invalid password');
         }
 
+        // Return user object
         return {
-          id: user._id.toString(),
+          id: user.id,
           email: user.email,
           name: user.name,
-          image: user.avatar,
+          image: user.image,
         };
       },
     }),
-    */
   ],
   session: {
     strategy: 'jwt',

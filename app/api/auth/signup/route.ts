@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import User from '@/lib/db/models/User';
-import bcrypt from 'bcryptjs';
+import { prisma } from '@/lib/db/prisma';
+import { hashPassword } from '@/lib/auth/password';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,11 +21,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Connect to database
-    await connectToDatabase();
-
     // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
     if (existingUser) {
       return NextResponse.json(
         { success: false, message: 'Email already registered' },
@@ -34,29 +33,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Hash password
+    const hashedPassword = await hashPassword(password);
+
     // Create new user
-    const user = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password,
-      aiCredits: 100, // Free credits for new users
-      plan: 'free',
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        aiCredits: 100, // Free credits for new users
+        credits: 100,
+        plan: 'FREE',
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        aiCredits: true,
+        credits: true,
+        plan: true,
+      },
     });
 
-    // Remove password from response
-    const userResponse = {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      aiCredits: user.aiCredits,
-      plan: user.plan,
-    };
-
     return NextResponse.json(
-      { 
-        success: true, 
+      {
+        success: true,
         message: 'Account created successfully',
-        user: userResponse
+        user
       },
       { status: 201 }
     );

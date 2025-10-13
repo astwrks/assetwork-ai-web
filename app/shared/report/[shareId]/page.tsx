@@ -1,7 +1,5 @@
 import { notFound } from 'next/navigation';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
-import Thread from '@/lib/db/models/Thread';
+import { prisma } from '@/lib/db/prisma';
 import { TrendingUp, Calendar, User, Globe } from 'lucide-react';
 import './shared-report.css';
 
@@ -16,33 +14,45 @@ interface PageProps {
 export default async function SharedReportPage({ params }: PageProps) {
   const { shareId } = await params;
 
-  await connectToDatabase();
-
-  // Find report by shareId
-  const report = await PlaygroundReport.findOne({
-    'publicShare.shareId': shareId,
-    'publicShare.isActive': true,
-  }).lean();
+  // Find report by shareId using Prisma
+  const report = await prisma.playgroundReport.findFirst({
+    where: {
+      publicShare: {
+        path: ['shareId'],
+        equals: shareId,
+      },
+    },
+    include: {
+      thread: true,
+    },
+  });
 
   if (!report) {
     notFound();
   }
 
-  // Check if expired
-  if (report.publicShare?.expiresAt && new Date(report.publicShare.expiresAt) < new Date()) {
+  // Check if share is active and not expired
+  const publicShare = report.publicShare as any;
+  if (!publicShare?.isActive) {
     notFound();
   }
 
-  // Get thread info for metadata
-  const thread = await Thread.findById(report.threadId).lean();
+  if (publicShare?.expiresAt && new Date(publicShare.expiresAt) < new Date()) {
+    notFound();
+  }
 
-  const createdDate = new Date(report.publicShare?.createdAt || report.createdAt).toLocaleDateString('en-US', {
+  const thread = report.thread;
+
+  const createdDate = new Date(publicShare?.createdAt || report.createdAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
 
-  const creatorEmail = report.publicShare?.createdBy || report.metadata?.generatedBy || 'Anonymous';
+  const metadata = report.metadata as any;
+  const usage = report.usage as any;
+  const insights = (report.insights || []) as any[];
+  const creatorEmail = publicShare?.createdBy || metadata?.generatedBy || 'Anonymous';
   const creatorName = creatorEmail.split('@')[0];
 
   return (
@@ -87,7 +97,7 @@ export default async function SharedReportPage({ params }: PageProps) {
               <span className="font-medium">Created by:</span>
               <span>{creatorName}</span>
             </div>
-            {report.metadata?.model && (
+            {metadata?.model && (
               <div className="flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-[#405D80]" />
                 <span className="font-medium">Generated with:</span>
@@ -98,14 +108,14 @@ export default async function SharedReportPage({ params }: PageProps) {
         </div>
 
         {/* Key Insights */}
-        {report.insights && report.insights.length > 0 && (
+        {insights.length > 0 && (
           <div className="mb-8 p-6 bg-gradient-to-br from-blue-50 to-purple-50 border-l-4 border-[#1B2951] rounded-lg shadow-sm">
             <h3 className="text-lg font-semibold text-[#1B2951] mb-4 flex items-center gap-2">
               <span className="text-2xl">💡</span>
               Key Insights
             </h3>
             <div className="space-y-3">
-              {report.insights.map((insight: any) => (
+              {insights.map((insight: any) => (
                 <div
                   key={insight.id}
                   className={`flex items-start gap-3 p-3 rounded-lg ${
