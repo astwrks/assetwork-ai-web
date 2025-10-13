@@ -12,7 +12,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -27,9 +27,9 @@ export async function GET(
     }
 
     // Check access permissions
-    const isOwner = thread.userId === session.user.email;
+    const isOwner = thread.userId === session.user.id;
     const hasSharedAccess = thread.sharedWith.some(
-      (share) => share.userId === session.user.email
+      (share) => share.userId === session.user.id
     );
 
     if (!isOwner && !hasSharedAccess) {
@@ -71,7 +71,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -86,7 +86,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
-    if (thread.userId !== session.user.email) {
+    if (thread.userId !== session.user.id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
@@ -125,7 +125,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -139,7 +139,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
-    if (thread.userId !== session.user.email) {
+    if (thread.userId !== session.user.id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
