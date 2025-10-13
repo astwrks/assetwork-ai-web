@@ -1,11 +1,10 @@
 import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
-import CredentialsProvider from 'next-auth/providers/credentials';
+// import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { PrismaClient } from '@prisma/client';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import User from '@/lib/db/models/User';
-import jwt from 'jsonwebtoken';
+// import { connectToDatabase } from '@/lib/db/mongodb';
+// import User from '@/lib/db/models/User';
 
 // Initialize Prisma Client
 const prisma = new PrismaClient();
@@ -25,6 +24,9 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    // Credentials provider disabled for Netlify deployment
+    // Re-enable once MongoDB is fully migrated to PostgreSQL
+    /*
     CredentialsProvider({
       name: 'credentials',
       credentials: {
@@ -37,15 +39,15 @@ export const authOptions: NextAuthOptions = {
         }
 
         await connectToDatabase();
-        
+
         const user = await User.findOne({ email: credentials.email }).select('+password');
-        
+
         if (!user || !user.password) {
           throw new Error('User not found');
         }
 
         const isPasswordValid = await user.comparePassword(credentials.password);
-        
+
         if (!isPasswordValid) {
           throw new Error('Invalid password');
         }
@@ -58,6 +60,7 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    */
   ],
   session: {
     strategy: 'jwt',

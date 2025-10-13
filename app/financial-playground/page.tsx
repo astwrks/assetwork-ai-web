@@ -25,7 +25,10 @@ import {
   MoreVertical,
   Check,
   StopCircle,
-  Zap
+  Zap,
+  Link2,
+  Globe,
+  Copy
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +40,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
 import InteractiveSection from '@/components/financial-playground/InteractiveSection';
 import EditingContext from '@/components/financial-playground/EditingContext';
