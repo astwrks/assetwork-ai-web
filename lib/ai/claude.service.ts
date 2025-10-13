@@ -25,6 +25,7 @@ export interface ClaudeStreamOptions {
   systemPrompt?: string;
   model?: string;
   onToken?: (token: string) => void;
+  onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
 }
 
 export class ClaudeService {
@@ -60,6 +61,7 @@ export class ClaudeService {
     temperature = 0.7,
     systemPrompt,
     model = 'claude-3-5-sonnet-20241022',
+    onUsage,
   }: ClaudeStreamOptions): AsyncGenerator<string> {
     try {
       const stream = await getAnthropic().messages.create({
@@ -74,9 +76,24 @@ export class ClaudeService {
         stream: true,
       });
 
+      let inputTokens = 0;
+      let outputTokens = 0;
+
       for await (const chunk of stream) {
         if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
           yield chunk.delta.text;
+        } else if (chunk.type === 'message_start') {
+          inputTokens = chunk.message.usage.input_tokens;
+          // Send usage update as soon as we get input tokens
+          if (onUsage && inputTokens > 0) {
+            onUsage({ inputTokens, outputTokens: 0 });
+          }
+        } else if (chunk.type === 'message_delta') {
+          outputTokens = chunk.usage.output_tokens;
+          // Send usage update when we get output tokens
+          if (onUsage) {
+            onUsage({ inputTokens, outputTokens });
+          }
         }
       }
     } catch (error) {

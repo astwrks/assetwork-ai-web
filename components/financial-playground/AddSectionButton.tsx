@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, X, Send, Loader2, Sparkles } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, X, Send, Loader2, Sparkles, Zap, TrendingUp, Award } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface AddSectionButtonProps {
@@ -11,6 +12,34 @@ interface AddSectionButtonProps {
   position: number;
   onSectionAdded: () => void;
 }
+
+// Predefined prompts by complexity level
+const SIMPLE_PROMPTS = [
+  'Add a summary of key metrics',
+  'Create a simple revenue chart',
+  'Show monthly expenses table',
+  'Add quarterly performance overview',
+  'Display profit margin analysis',
+  'Show customer growth metrics',
+];
+
+const INTERMEDIATE_PROMPTS = [
+  'Compare revenue vs expenses with year-over-year trends',
+  'Analyze customer acquisition cost and lifetime value',
+  'Create a cash flow forecast for next 6 months',
+  'Show product performance breakdown by region',
+  'Analyze operational efficiency metrics with benchmarks',
+  'Compare budget vs actual with variance analysis',
+];
+
+const ADVANCED_PROMPTS = [
+  'Perform scenario analysis showing best/worst case financial projections with sensitivity tables',
+  'Create a comprehensive competitive analysis with market share trends and positioning matrix',
+  'Build a discounted cash flow (DCF) valuation model with WACC calculation and terminal value',
+  'Analyze working capital optimization with days sales outstanding and inventory turnover metrics',
+  'Generate a strategic financial dashboard with KPIs, variance analysis, and executive insights',
+  'Create a risk-adjusted portfolio analysis with correlation matrix and Sharpe ratios',
+];
 
 export default function AddSectionButton({
   reportId,
@@ -21,13 +50,8 @@ export default function AddSectionButton({
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [suggestions, setSuggestions] = useState<string[]>([
-    'Add a bar chart comparing monthly revenue',
-    'Create a table showing top 5 expenses',
-    'Add key financial metrics for Q4',
-    'Show year-over-year growth comparison',
-    'Add cash flow analysis section',
-  ]);
+  const [activeTab, setActiveTab] = useState<'simple' | 'intermediate' | 'advanced'>('simple');
+  const [contextualSuggestions, setContextualSuggestions] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   const handleGenerate = async () => {
@@ -121,14 +145,28 @@ export default function AddSectionButton({
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.suggestions) {
-          setSuggestions(data.suggestions);
+          setContextualSuggestions(data.suggestions);
         }
       }
     } catch (error) {
       console.error('Failed to fetch suggestions:', error);
-      // Keep default suggestions on error
+      // Keep predefined suggestions on error
     } finally {
       setLoadingSuggestions(false);
+    }
+  };
+
+  // Get current prompts based on active tab
+  const getCurrentPrompts = () => {
+    switch (activeTab) {
+      case 'simple':
+        return SIMPLE_PROMPTS;
+      case 'intermediate':
+        return INTERMEDIATE_PROMPTS;
+      case 'advanced':
+        return ADVANCED_PROMPTS;
+      default:
+        return SIMPLE_PROMPTS;
     }
   };
 
@@ -210,37 +248,90 @@ export default function AddSectionButton({
         </div>
 
         <div>
-          <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
-            Quick suggestions:
-            {loadingSuggestions && (
-              <Loader2 className="w-3 h-3 animate-spin text-primary" />
-            )}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {loadingSuggestions ? (
-              // Loading skeleton
-              <>
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div
+          <p className="text-sm font-medium text-foreground mb-3">Quick Prompts by Complexity:</p>
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'simple' | 'intermediate' | 'advanced')}>
+            <TabsList className="grid w-full grid-cols-3 mb-4">
+              <TabsTrigger value="simple" className="flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5" />
+                <span>Simple</span>
+              </TabsTrigger>
+              <TabsTrigger value="intermediate" className="flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span>Intermediate</span>
+              </TabsTrigger>
+              <TabsTrigger value="advanced" className="flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5" />
+                <span>Advanced</span>
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="simple" className="mt-0">
+              <div className="flex flex-wrap gap-2">
+                {SIMPLE_PROMPTS.map((promptText, i) => (
+                  <button
                     key={i}
-                    className="h-6 w-32 rounded-full bg-gray-200 animate-pulse"
-                  />
+                    onClick={() => setPrompt(promptText)}
+                    disabled={isGenerating}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-green-50 hover:bg-green-100 border border-green-200 hover:border-green-400 text-green-800 transition-colors disabled:opacity-50 text-left"
+                  >
+                    {promptText}
+                  </button>
                 ))}
-              </>
-            ) : (
-              // Actual suggestions
-              suggestions.map((suggestion, i) => (
-                <button
-                  key={i}
-                  onClick={() => setPrompt(suggestion)}
-                  disabled={isGenerating}
-                  className="text-xs px-3 py-1 rounded-full bg-white hover:bg-gray-50 border border-gray-200 hover:border-primary transition-colors disabled:opacity-50"
-                >
-                  {suggestion}
-                </button>
-              ))
-            )}
-          </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="intermediate" className="mt-0">
+              <div className="flex flex-wrap gap-2">
+                {INTERMEDIATE_PROMPTS.map((promptText, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setPrompt(promptText)}
+                    disabled={isGenerating}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-400 text-blue-800 transition-colors disabled:opacity-50 text-left"
+                  >
+                    {promptText}
+                  </button>
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="advanced" className="mt-0">
+              <div className="flex flex-wrap gap-2">
+                {ADVANCED_PROMPTS.map((promptText, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setPrompt(promptText)}
+                    disabled={isGenerating}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 border border-purple-200 hover:border-purple-400 text-purple-800 transition-colors disabled:opacity-50 text-left"
+                  >
+                    {promptText}
+                  </button>
+                ))}
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          {/* Contextual AI-generated suggestions */}
+          {contextualSuggestions.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
+                AI-suggested based on your report:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {contextualSuggestions.map((suggestion, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setPrompt(suggestion)}
+                    disabled={isGenerating}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border border-primary/30 hover:border-primary text-primary transition-colors disabled:opacity-50 text-left"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Preview */}

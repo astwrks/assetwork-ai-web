@@ -7,6 +7,7 @@ import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
 import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
+import { trackReportUsage } from '@/lib/ai/usage-tracker';
 
 // System prompt for financial report generation with AssetWorks branding
 const FINANCIAL_REPORT_PROMPT = `You are an expert financial analyst and data visualization specialist. Your role is to:
@@ -252,6 +253,8 @@ export async function POST(
     (async () => {
       const startTime = Date.now();
       let accumulatedContent = '';
+      let usageData = { inputTokens: 0, outputTokens: 0 };
+      let reportId: string | null = null;
 
       try {
         // Generate AI response
@@ -268,6 +271,17 @@ export async function POST(
             model,
             temperature: selectedModel.temperature,
             maxTokens: selectedModel.maxTokens,
+            onUsage: (usage) => {
+              usageData = usage;
+              console.log('🔔 Sending usage update to client:', usage);
+              // Send usage update to client during streaming
+              const usageChunk = `data: ${JSON.stringify({
+                type: 'usage',
+                inputTokens: usage.inputTokens,
+                outputTokens: usage.outputTokens,
+              })}\n\n`;
+              writer.write(encoder.encode(usageChunk)).catch(() => {});
+            },
           });
         } else {
           generator = openaiService.streamResponse({
@@ -312,10 +326,22 @@ export async function POST(
           },
         });
         await report.save();
+        reportId = report._id.toString();
+
+        // Track usage if we have token data
+        if (usageData.inputTokens > 0 || usageData.outputTokens > 0) {
+          await trackReportUsage(reportId, {
+            type: 'generation',
+            model,
+            provider,
+            inputTokens: usageData.inputTokens,
+            outputTokens: usageData.outputTokens,
+          });
+        }
 
         // Update thread with new report
-        thread.currentReportId = report._id.toString();
-        thread.reportVersions.push(report._id.toString());
+        thread.currentReportId = reportId;
+        thread.reportVersions.push(reportId);
         await thread.save();
 
         // Generate a conversational summary for chat display

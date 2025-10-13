@@ -46,3 +46,6 @@ NETLIFY_ENV_QUICK.txt
 NETLIFY_ENV_VARIABLES.env
 PASTE_TO_NETLIFY.txt
 .env.netlify
+
+# Local Netlify folder
+.netlify

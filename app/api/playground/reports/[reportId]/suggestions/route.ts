@@ -86,11 +86,10 @@ Requirements:
 Return only the JSON array, no other text.`;
 
     try {
-      const response = await claudeService.chat({
-        messages: [{ role: 'user', content: prompt }],
-        model: 'claude-3-5-sonnet-20241022',
-        systemPrompt: 'You are a financial analysis expert. Return only valid JSON.',
-      });
+      const response = await claudeService.generateResponse(
+        prompt,
+        'You are a financial analysis expert. Return only valid JSON.'
+      );
 
       // Extract JSON from response
       let suggestions = [];

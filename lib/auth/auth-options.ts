@@ -1,14 +1,17 @@
 import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { MongoDBAdapter } from '@auth/mongodb-adapter';
-import clientPromise from './mongodb-client';
+import { PrismaAdapter } from '@auth/prisma-adapter';
+import { PrismaClient } from '@prisma/client';
 import { connectToDatabase } from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
 import jwt from 'jsonwebtoken';
 
+// Initialize Prisma Client
+const prisma = new PrismaClient();
+
 export const authOptions: NextAuthOptions = {
-  adapter: MongoDBAdapter(clientPromise),
+  adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -85,38 +88,17 @@ export const authOptions: NextAuthOptions = {
     verifyRequest: '/auth/verify-request',
   },
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
+      // Add user ID to token on initial sign-in
       if (user) {
         token.id = user.id;
-        token.email = user.email;
-        token.name = user.name;
-        token.picture = user.image;
       }
-
-      if (account?.provider === 'google') {
-        await connectToDatabase();
-        const dbUser = await User.findOne({ email: token.email });
-        if (!dbUser) {
-          const newUser = await User.create({
-            email: token.email,
-            name: token.name,
-            avatar: token.picture,
-            googleId: account.providerAccountId,
-          });
-          token.id = newUser._id.toString();
-        } else {
-          token.id = dbUser._id.toString();
-        }
-      }
-
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
+      // Add user ID to session
+      if (session.user && token.id) {
         session.user.id = token.id as string;
-        session.user.email = token.email as string;
-        session.user.name = token.name as string;
-        session.user.image = token.picture as string;
       }
       return session;
     },

@@ -6,6 +6,7 @@ import ReportSection from '@/lib/db/models/ReportSection';
 import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
+import { trackReportUsage } from '@/lib/ai/usage-tracker';
 
 // GET /api/playground/reports/:reportId/sections - Get all sections for a report
 export async function GET(
@@ -146,7 +147,7 @@ export async function POST(
           .join('\n')
       : '';
 
-    const contextPrompt = `You are generating a new section for a financial report. Your goal is to create content that is coherent with the existing report, matches its style and tone, and adds meaningful value.
+    const contextPrompt = `You are an expert financial report designer generating a new section with PROFESSIONAL, HIGH-QUALITY HTML. Your goal is to create visually stunning, modern content that is coherent with the existing report.
 
 REPORT CONTEXT:
 =================
@@ -155,30 +156,114 @@ Report Type: ${report.metadata?.reportType || 'Financial Analysis'}
 Created: ${report.createdAt ? new Date(report.createdAt).toLocaleDateString() : 'Recently'}
 ${conversationContext}${sectionsContext}${dataPointsContext}
 
-STYLE GUIDELINES:
-=================
-- Match the tone and complexity of existing sections
-- Use consistent terminology with previous sections
-- Reference data points from existing sections when relevant
-- Maintain professional financial reporting standards
-- Use AssetWorks branding colors: Primary (#1B2951), Secondary (#405D80), Accent (#6C7B95)
+ASSETWORKS DESIGN SYSTEM:
+==========================
+COLOR PALETTE (Use these exact hex codes):
+- Primary: #1B2951 (Navy Blue) - Main headings, important text
+- Secondary: #405D80 (Steel Blue) - Subheadings, secondary elements
+- Accent: #6C7B95 (Slate Blue) - Muted text, borders
+- Success: #10B981 - Positive metrics, growth indicators
+- Warning: #F59E0B - Caution, moderate alerts
+- Danger: #EF4444 - Negative metrics, alerts
+- Info: #3B82F6 - Informational elements
+- Background: #F8FAFC - Light backgrounds
+- Text: #1E293B - Body text
+- Muted: #64748B - Secondary text, captions
+
+TYPOGRAPHY HIERARCHY (Tailwind Classes):
+- Section Title: class="text-2xl md:text-3xl font-bold text-[#1B2951] mb-6 pb-4 border-b-2 border-[#405D80]"
+- Subsection: class="text-xl font-semibold text-[#405D80] mb-4"
+- Body Text: class="text-base text-[#1E293B] leading-relaxed"
+- Caption: class="text-sm text-[#64748B]"
+- Large Metrics: class="text-3xl md:text-4xl font-bold text-[#1B2951]"
+
+PROFESSIONAL COMPONENT PATTERNS:
+=================================
+
+1. METRIC CARDS (Use for KPIs, statistics):
+<div class="bg-gradient-to-br from-blue-50 to-white rounded-lg p-6 border border-blue-100 hover:shadow-md transition-shadow">
+  <div class="flex items-center justify-between mb-2">
+    <span class="text-sm font-medium text-[#64748B]">Metric Name</span>
+    <svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+      <path fill-rule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clip-rule="evenodd"/>
+    </svg>
+  </div>
+  <div class="text-3xl font-bold text-[#1B2951]">$2.4M</div>
+  <div class="mt-2 flex items-center text-sm">
+    <span class="text-green-600 font-medium">↑ 12.5%</span>
+    <span class="text-[#64748B] ml-2">vs last period</span>
+  </div>
+</div>
+
+2. DATA TABLES (Professional styling):
+<div class="overflow-x-auto rounded-lg border border-gray-200">
+  <table class="min-w-full divide-y divide-gray-200">
+    <thead class="bg-gradient-to-r from-[#1B2951] to-[#405D80]">
+      <tr>
+        <th class="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">Column</th>
+      </tr>
+    </thead>
+    <tbody class="bg-white divide-y divide-gray-200">
+      <tr class="hover:bg-gray-50 transition-colors">
+        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#1E293B]">Data</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+3. INSIGHT/ALERT BOXES:
+<div class="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-6 my-6 shadow-sm">
+  <div class="flex items-start">
+    <svg class="w-6 h-6 text-blue-500 mt-1 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+    </svg>
+    <div>
+      <h4 class="text-lg font-semibold text-[#1B2951] mb-2">Key Insight</h4>
+      <p class="text-[#1E293B] leading-relaxed">Insight content here</p>
+    </div>
+  </div>
+</div>
+
+4. STATUS BADGES:
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">✓ On Target</span>
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">⚠ Warning</span>
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">✗ Critical</span>
 
 USER'S NEW SECTION REQUEST:
 ===========================
 ${prompt}
 
-INSTRUCTIONS:
-=============
-1. Analyze the existing sections to understand the report's narrative and data points
-2. Create a new section that fits naturally with the existing content
-3. If the user's request relates to existing data, incorporate and build upon it
-4. Generate ONLY clean, semantic HTML for this new section
-5. Include a data-section-id attribute: data-section-id="section_${type}_${position || 'new'}"
-6. Use appropriate heading levels (h2 for section title, h3 for subsections)
-7. Include relevant charts, tables, or data visualizations if appropriate
-8. Return ONLY the HTML content, no explanations or markdown code blocks
+MANDATORY QUALITY REQUIREMENTS:
+================================
+1. ✓ Wrap entire section in: <section data-section-id="section_${type}_${position || 'new'}" class="bg-white rounded-xl shadow-sm p-6 md:p-8 space-y-6">
+2. ✓ Use h2 for main title with bottom border: class="text-2xl md:text-3xl font-bold text-[#1B2951] mb-6 pb-4 border-b-2 border-[#405D80]"
+3. ✓ Use gradient backgrounds for metric cards: class="bg-gradient-to-br from-blue-50 to-white"
+4. ✓ Add hover effects: class="hover:shadow-md transition-shadow"
+5. ✓ Use grid layouts for multiple items: class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+6. ✓ Format all numbers with commas: $1,234,567 not $1234567
+7. ✓ Include trend indicators: ↑ ↓ → with colors (green/red/gray)
+8. ✓ Use SVG icons from Heroicons for visual interest
+9. ✓ Add rounded corners to all containers: class="rounded-lg" or "rounded-xl"
+10. ✓ Include proper spacing: p-6, space-y-4, gap-6
+11. ✓ Make it responsive with md: and lg: breakpoints
+12. ✓ Use semantic HTML5 elements
+13. ✓ Add subtle shadows: class="shadow-sm" or "shadow-md"
 
-Generate the new section now:`;
+DATA PRESENTATION EXCELLENCE:
+==============================
+- Format currency: $2,400,000 (with commas)
+- Show percentages: 12.5% (one decimal)
+- Add comparison text: "vs last quarter", "YoY growth"
+- Color code metrics: green for positive, red for negative
+- Include context: time periods, benchmarks, targets
+- Use visual hierarchy: large numbers, small labels
+
+RETURN FORMAT:
+==============
+Return ONLY the HTML content. NO markdown code blocks, NO explanations, NO backticks.
+Start directly with the <section> tag.
+
+Generate a professional, visually stunning section now:`;
 
     // Create streaming response
     const encoder = new TextEncoder();
@@ -188,6 +273,7 @@ Generate the new section now:`;
     // Start AI generation in background
     (async () => {
       let accumulatedContent = '';
+      let usageData = { inputTokens: 0, outputTokens: 0 };
 
       try {
         let generator;
@@ -195,8 +281,13 @@ Generate the new section now:`;
         if (provider === 'anthropic' || model.startsWith('claude')) {
           generator = claudeService.streamResponse({
             messages: [{ role: 'user', content: contextPrompt }],
-            systemPrompt: settings?.systemPrompt || '',
+            systemPrompt: settings?.systemPrompt || 'You are an expert financial report designer. Generate professional, visually stunning HTML with modern design patterns.',
             model,
+            maxTokens: 4000, // Increased for complex HTML generation
+            temperature: 0.7,
+            onUsage: (usage) => {
+              usageData = usage;
+            },
           });
         } else {
           generator = openaiService.streamResponse({
@@ -262,6 +353,17 @@ Generate the new section now:`;
         });
 
         await newSection.save();
+
+        // Track usage
+        if (usageData.inputTokens > 0 || usageData.outputTokens > 0) {
+          await trackReportUsage(reportId, {
+            type: 'section_add',
+            model,
+            provider,
+            inputTokens: usageData.inputTokens,
+            outputTokens: usageData.outputTokens,
+          });
+        }
 
         // Update report to enable interactive mode
         report.isInteractiveMode = true;

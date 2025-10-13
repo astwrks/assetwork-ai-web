@@ -22,6 +22,7 @@ import {
 import toast from 'react-hot-toast';
 import { formatModelName } from '@/lib/utils/modelFormatter';
 import InteractiveSection from './InteractiveSection';
+import ReportMetricsTicker from './ReportMetricsTicker';
 
 interface Report {
   _id: string;
@@ -358,6 +359,11 @@ export default function ReportDisplay({
 
   return (
     <div className="flex flex-col h-full">
+      {/* Usage Metrics Ticker - Show whenever we have a reportId */}
+      {reportId && (
+        <ReportMetricsTicker reportId={reportId} />
+      )}
+
       {/* Report Header */}
       <div className="px-4 py-3 border-b">
         <div className="flex items-center justify-between mb-2">

@@ -23,7 +23,9 @@ import {
   Trash2,
   Search,
   MoreVertical,
-  Check
+  Check,
+  StopCircle,
+  Zap
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +41,7 @@ import toast from 'react-hot-toast';
 import InteractiveSection from '@/components/financial-playground/InteractiveSection';
 import EditingContext from '@/components/financial-playground/EditingContext';
 import AddSectionButton from '@/components/financial-playground/AddSectionButton';
+import ReportMetricsTicker from '@/components/financial-playground/ReportMetricsTicker';
 
 interface Thread {
   _id: string;
@@ -112,6 +115,8 @@ export default function FinancialPlaygroundPage() {
     return true;
   });
   const [streamingContent, setStreamingContent] = useState('');
+  const [streamingUsage, setStreamingUsage] = useState<{inputTokens: number; outputTokens: number} | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Interactive sections state
   const [sections, setSections] = useState<Section[]>([]);
@@ -419,6 +424,7 @@ export default function FinancialPlaygroundPage() {
 
     // Normal message flow - only add to chat if NOT in edit mode
     setStreamingContent('');
+    setStreamingUsage(null);
 
     // Add user message immediately
     const tempUserMessage: Message = {
@@ -428,6 +434,10 @@ export default function FinancialPlaygroundPage() {
       createdAt: new Date().toISOString(),
     };
     setMessages([...messages, tempUserMessage]);
+
+    // Create abort controller for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     try {
       const response = await fetch(
@@ -440,6 +450,7 @@ export default function FinancialPlaygroundPage() {
             model: 'claude-3-5-sonnet-20241022',
             provider: 'anthropic',
           }),
+          signal: abortController.signal,
         }
       );
 
@@ -468,10 +479,18 @@ export default function FinancialPlaygroundPage() {
                 if (data.type === 'content') {
                   accumulated += data.content;
                   setStreamingContent(accumulated);
+                } else if (data.type === 'usage') {
+                  // Update streaming usage display
+                  console.log('📊 Usage update received:', data);
+                  setStreamingUsage({
+                    inputTokens: data.inputTokens,
+                    outputTokens: data.outputTokens,
+                  });
                 } else if (data.type === 'complete') {
                   // Reload thread to get the saved message and report
                   await loadThread(currentThread._id);
                   setStreamingContent('');
+                  setStreamingUsage(null);
                   toast.success('Report generated successfully');
                 } else if (data.type === 'error') {
                   throw new Error(data.error);
@@ -483,11 +502,18 @@ export default function FinancialPlaygroundPage() {
           }
         }
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error('Failed to generate report');
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        toast.success('Report generation stopped');
+        setStreamingContent('');
+        setStreamingUsage(null);
+      } else {
+        console.error('Error sending message:', error);
+        toast.error('Failed to generate report');
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -645,6 +671,16 @@ export default function FinancialPlaygroundPage() {
       toast.error('Failed to add section');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Stop generation
+  const stopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setIsLoading(false);
+      setStreamingContent('');
+      setStreamingUsage(null);
     }
   };
 
@@ -1186,10 +1222,26 @@ export default function FinancialPlaygroundPage() {
 
                     {streamingContent && (
                       <div className="mb-4 text-left">
-                        <div className="inline-block max-w-[80%] p-3 rounded-lg bg-muted">
-                          <div className="text-sm text-foreground flex items-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                            <span>Generating report...</span>
+                        <div className="inline-block max-w-[80%] p-3 rounded-lg bg-muted border border-blue-200">
+                          <div className="flex flex-col gap-2">
+                            <div className="text-sm text-foreground flex items-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                              <span className="font-medium">Generating report...</span>
+                            </div>
+                            {streamingUsage && (
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground border-t pt-2 mt-1">
+                                <div className="flex items-center gap-1">
+                                  <Zap className="w-3 h-3 text-blue-500" />
+                                  <span>{streamingUsage.inputTokens + streamingUsage.outputTokens} tokens</span>
+                                </div>
+                                <div className="text-gray-300">|</div>
+                                <div>
+                                  <span className="text-green-600">{streamingUsage.inputTokens} in</span>
+                                  <span className="mx-1">·</span>
+                                  <span className="text-blue-600">{streamingUsage.outputTokens} out</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1267,17 +1319,28 @@ export default function FinancialPlaygroundPage() {
                         disabled={isLoading || !currentThread}
                         className="flex-1 chat-input-field"
                       />
-                      <Button
-                        onClick={sendMessage}
-                        disabled={isLoading || !currentThread || !inputMessage.trim()}
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                      >
-                        {isLoading ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Send className="w-4 h-4" />
-                        )}
-                      </Button>
+                      {isLoading && streamingContent ? (
+                        <Button
+                          onClick={stopGeneration}
+                          variant="destructive"
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          <StopCircle className="w-4 h-4 mr-2" />
+                          Stop
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={sendMessage}
+                          disabled={isLoading || !currentThread || !inputMessage.trim()}
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                        >
+                          {isLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Send className="w-4 h-4" />
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1290,6 +1353,11 @@ export default function FinancialPlaygroundPage() {
           {/* Report Panel (Right) */}
           <Panel defaultSize={70} minSize={50} id="report-panel">
             <div className="h-full flex flex-col bg-white">
+              {/* Usage Metrics Ticker - Show whenever we have a report */}
+              {currentReport && (
+                <ReportMetricsTicker reportId={currentReport._id} />
+              )}
+
               {/* Exit Edit Mode Button */}
               {editingContext && (
                 <div className="bg-blue-600 text-white px-4 py-2 flex items-center justify-between">

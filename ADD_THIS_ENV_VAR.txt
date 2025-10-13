@@ -1,0 +1,26 @@
+# MISSING ENVIRONMENT VARIABLE - ADD THIS TO NETLIFY
+
+The site is still crashing because MongoDB URI is missing.
+Even though we're migrating to PostgreSQL, some code paths still expect MongoDB.
+
+ADD THIS TO NETLIFY:
+=====================
+
+Go to: Site settings → Environment variables → Add variable
+
+Name:
+MONGODB_URI
+
+Value:
+mongodb+srv://placeholder:placeholder@placeholder.mongodb.net/placeholder?retryWrites=true&w=majority
+
+(This is a dummy value - won't actually connect but prevents crashes)
+
+OR use a real MongoDB Atlas connection if you have one.
+
+After adding:
+1. Go to Deploys tab
+2. Trigger deploy → Deploy site
+3. Wait for build to complete
+
+This should fix the 502 error!

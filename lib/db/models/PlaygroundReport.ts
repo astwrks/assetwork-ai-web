@@ -39,6 +39,19 @@ export interface IPlaygroundReport {
     dataSources?: string[]; // List of data sources used
     generationTime?: number; // Time taken to generate (ms)
   };
+  usage?: {
+    totalTokens: number; // Total tokens used across all operations
+    totalCost: number; // Total cost in USD
+    operations: Array<{
+      type: 'generation' | 'edit' | 'section_add' | 'suggestion';
+      timestamp: Date;
+      model: string;
+      provider: string;
+      inputTokens: number;
+      outputTokens: number;
+      cost: number;
+    }>;
+  };
   pdfUrl?: string; // URL to exported PDF
   isPublished: boolean;
   publishedAt?: Date;
@@ -147,6 +160,28 @@ const PlaygroundReportSchema = new mongoose.Schema<IPlaygroundReport>(
       prompt: String,
       dataSources: [String],
       generationTime: Number,
+    },
+    usage: {
+      totalTokens: {
+        type: Number,
+        default: 0,
+      },
+      totalCost: {
+        type: Number,
+        default: 0,
+      },
+      operations: [{
+        type: {
+          type: String,
+          enum: ['generation', 'edit', 'section_add', 'suggestion'],
+        },
+        timestamp: Date,
+        model: String,
+        provider: String,
+        inputTokens: Number,
+        outputTokens: Number,
+        cost: Number,
+      }],
     },
     pdfUrl: String,
     isPublished: {
