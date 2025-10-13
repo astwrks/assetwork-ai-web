@@ -8,7 +8,7 @@
   # Skip secrets scanning for build output
   SECRETS_SCAN_ENABLED = "false"
   # Prisma configuration
-  PRISMA_CLI_BINARY_TARGETS = "native,rhel-openssl-3.0.x"
+  PRISMA_CLI_BINARY_TARGETS = "rhel-openssl-3.0.x"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
