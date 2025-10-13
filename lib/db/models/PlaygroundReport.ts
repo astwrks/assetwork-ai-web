@@ -52,6 +52,13 @@ export interface IPlaygroundReport {
       cost: number;
     }>;
   };
+  publicShare?: {
+    shareId: string;
+    isActive: boolean;
+    createdAt: Date;
+    createdBy: string;
+    expiresAt?: Date;
+  };
   pdfUrl?: string; // URL to exported PDF
   isPublished: boolean;
   publishedAt?: Date;
@@ -182,6 +189,21 @@ const PlaygroundReportSchema = new mongoose.Schema<IPlaygroundReport>(
         outputTokens: Number,
         cost: Number,
       }],
+    },
+    publicShare: {
+      shareId: {
+        type: String,
+        unique: true,
+        sparse: true, // Allow multiple docs without publicShare
+        index: true,
+      },
+      isActive: {
+        type: Boolean,
+        default: true,
+      },
+      createdAt: Date,
+      createdBy: String,
+      expiresAt: Date,
     },
     pdfUrl: String,
     isPublished: {

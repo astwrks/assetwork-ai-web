@@ -128,6 +128,7 @@ export default function FinancialPlaygroundPage() {
   const [streamingContent, setStreamingContent] = useState('');
   const [streamingUsage, setStreamingUsage] = useState<{inputTokens: number; outputTokens: number} | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
 
   // Interactive sections state
   const [sections, setSections] = useState<Section[]>([]);
@@ -925,23 +926,13 @@ export default function FinancialPlaygroundPage() {
     thread.title.toLowerCase().includes(threadSearchQuery.toLowerCase())
   );
 
-  // Handle sharing thread URL
-  const handleShareThread = async () => {
+  // Handle share button click - open dialog
+  const handleShare = () => {
     if (!currentThread) {
       toast.error('No active thread to share');
       return;
     }
-
-    try {
-      const threadUrl = `${window.location.origin}/financial-playground/${currentThread._id}`;
-      await navigator.clipboard.writeText(threadUrl);
-      toast.success('Thread URL copied to clipboard!');
-    } catch (error) {
-      console.error('Error copying to clipboard:', error);
-      // Fallback for browsers that don't support clipboard API
-      const threadUrl = `${window.location.origin}/financial-playground/${currentThread._id}`;
-      toast.success(`Share this URL: ${threadUrl}`);
-    }
+    setIsShareDialogOpen(true);
   };
 
   if (status === 'loading') {
@@ -979,7 +970,7 @@ export default function FinancialPlaygroundPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handleShareThread}
+            onClick={handleShare}
             disabled={!currentThread}
           >
             <Share2 className="w-4 h-4 mr-2" />
@@ -1515,6 +1506,15 @@ export default function FinancialPlaygroundPage() {
           </Panel>
         </PanelGroup>
       </div>
+
+      {/* Share Dialog */}
+      <ShareDialog
+        isOpen={isShareDialogOpen}
+        onClose={() => setIsShareDialogOpen(false)}
+        threadId={currentThread?._id}
+        reportId={currentReport?._id}
+        userEmail={session?.user?.email}
+      />
     </div>
   );
 }

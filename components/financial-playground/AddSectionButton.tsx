@@ -50,7 +50,7 @@ export default function AddSectionButton({
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [activeTab, setActiveTab] = useState<'simple' | 'intermediate' | 'advanced'>('simple');
+  const [activeTab, setActiveTab] = useState<'suggested' | 'simple' | 'intermediate' | 'advanced'>('suggested');
   const [contextualSuggestions, setContextualSuggestions] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
@@ -248,9 +248,13 @@ export default function AddSectionButton({
         </div>
 
         <div>
-          <p className="text-sm font-medium text-foreground mb-3">Quick Prompts by Complexity:</p>
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'simple' | 'intermediate' | 'advanced')}>
-            <TabsList className="grid w-full grid-cols-3 mb-4">
+          <p className="text-sm font-medium text-foreground mb-3">Quick Prompts:</p>
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'suggested' | 'simple' | 'intermediate' | 'advanced')}>
+            <TabsList className="grid w-full grid-cols-4 mb-4">
+              <TabsTrigger value="suggested" className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Suggested</span>
+              </TabsTrigger>
               <TabsTrigger value="simple" className="flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5" />
                 <span>Simple</span>
@@ -264,6 +268,40 @@ export default function AddSectionButton({
                 <span>Advanced</span>
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="suggested" className="mt-0">
+              {loadingSuggestions ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary mr-2" />
+                  <span className="text-sm text-muted-foreground">Analyzing your report...</span>
+                </div>
+              ) : contextualSuggestions.length > 0 ? (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-primary" />
+                    AI-suggested based on your report content
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {contextualSuggestions.map((suggestion, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setPrompt(suggestion)}
+                        disabled={isGenerating}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border border-primary/30 hover:border-primary text-primary transition-colors disabled:opacity-50 text-left"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 px-4">
+                  <Sparkles className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground mb-1">No AI suggestions yet</p>
+                  <p className="text-xs text-muted-foreground">Try the other tabs for pre-built prompts</p>
+                </div>
+              )}
+            </TabsContent>
 
             <TabsContent value="simple" className="mt-0">
               <div className="flex flex-wrap gap-2">
@@ -310,28 +348,6 @@ export default function AddSectionButton({
               </div>
             </TabsContent>
           </Tabs>
-
-          {/* Contextual AI-generated suggestions */}
-          {contextualSuggestions.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-primary" />
-                AI-suggested based on your report:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {contextualSuggestions.map((suggestion, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setPrompt(suggestion)}
-                    disabled={isGenerating}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border border-primary/30 hover:border-primary text-primary transition-colors disabled:opacity-50 text-left"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Preview */}
