@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -10,13 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { TrendingUp, Mail, Lock, Chrome } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('test@assetworks.ai');
   const [password, setPassword] = useState('Test123456!');
   const [loading, setLoading] = useState(false);
-  
+
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,5 +150,13 @@ export default function SignInPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <SignInForm />
+    </Suspense>
   );
 }

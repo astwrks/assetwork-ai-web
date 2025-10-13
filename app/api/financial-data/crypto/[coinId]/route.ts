@@ -9,10 +9,10 @@ import { coinGeckoService } from '@/lib/services/financial-data/coingecko.servic
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { coinId: string } }
+  { params }: { params: Promise<{ coinId: string }> }
 ) {
   try {
-    const { coinId } = params;
+    const { coinId } = await params;
     const searchParams = request.nextUrl.searchParams;
     const includeHistory = searchParams.get('history') === 'true';
     const days = parseInt(searchParams.get('days') || '30');

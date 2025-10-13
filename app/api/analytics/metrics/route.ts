@@ -188,7 +188,7 @@ export async function GET(request: NextRequest) {
             totalViews: item.totalViews,
           })),
         },
-        topReports: topReports.map(report => ({
+        topReports: topReports.map((report: any) => ({
           id: report._id.toString(),
           name: report.name,
           type: report.type,

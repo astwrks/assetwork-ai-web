@@ -6,7 +6,7 @@ import Template from '@/lib/db/models/Template';
 // GET /api/playground/templates/[templateId] - Get template details
 export async function GET(
   request: NextRequest,
-  { params }: { params: { templateId: string } }
+  { params }: { params: Promise<{ templateId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -16,7 +16,8 @@ export async function GET(
 
     await connectToDatabase();
 
-    const template = await Template.findById(params.templateId);
+    const { templateId } = await params;
+    const template = await Template.findById(templateId);
 
     if (!template) {
       return NextResponse.json(
@@ -49,7 +50,7 @@ export async function GET(
 // PUT /api/playground/templates/[templateId] - Update template
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { templateId: string } }
+  { params }: { params: Promise<{ templateId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -59,7 +60,8 @@ export async function PUT(
 
     await connectToDatabase();
 
-    const template = await Template.findById(params.templateId);
+    const { templateId } = await params;
+    const template = await Template.findById(templateId);
 
     if (!template) {
       return NextResponse.json(
@@ -97,7 +99,7 @@ export async function PUT(
     );
 
     const updatedTemplate = await Template.findByIdAndUpdate(
-      params.templateId,
+      templateId,
       { $set: updates },
       { new: true, runValidators: true }
     );
@@ -115,7 +117,7 @@ export async function PUT(
 // DELETE /api/playground/templates/[templateId] - Delete template
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { templateId: string } }
+  { params }: { params: Promise<{ templateId: string }> }
 ) {
   try {
     const session = await getServerSession();
@@ -125,7 +127,8 @@ export async function DELETE(
 
     await connectToDatabase();
 
-    const template = await Template.findById(params.templateId);
+    const { templateId } = await params;
+    const template = await Template.findById(templateId);
 
     if (!template) {
       return NextResponse.json(
@@ -142,7 +145,7 @@ export async function DELETE(
       );
     }
 
-    await Template.findByIdAndDelete(params.templateId);
+    await Template.findByIdAndDelete(templateId);
 
     return NextResponse.json(
       { message: 'Template deleted successfully' },

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      keys: keys.map(key => ({
+      keys: keys.map((key: any) => ({
         id: key._id.toString(),
         name: key.name,
         provider: key.provider,
