@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const widgets = await prisma.widget.findMany({
+    const widgets = await prisma.widgets.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const widget = await prisma.widget.create({
+    const widget = await prisma.widgets.create({
       data: {
         userId: session.user.id,
         title,
