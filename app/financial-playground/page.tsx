@@ -55,6 +55,7 @@ import ReportMetricsTicker from '@/components/financial-playground/ReportMetrics
 import ShareDialog from '@/components/financial-playground/ShareDialog';
 import ContextProgressBar from '@/components/financial-playground/ContextProgressBar';
 import ContextDetailsModal from '@/components/financial-playground/ContextDetailsModal';
+import { EntityChips } from '@/components/entities/EntityChips';
 
 interface Thread {
   _id: string;
@@ -1491,6 +1492,13 @@ export default function FinancialPlaygroundPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Entity Chips */}
+              {currentReport && (
+                <div className="border-b border-gray-200 px-4 py-3 bg-gray-50">
+                  <EntityChips reportId={currentReport._id} />
                 </div>
               )}
 
