@@ -106,9 +106,7 @@ export const authOptions: NextAuthOptions = {
   useSecureCookies: process.env.NODE_ENV === 'production',
   pages: {
     signIn: '/auth/signin',
-    signUp: '/auth/signup',
     error: '/auth/error',
-    verifyRequest: '/auth/verify-request',
   },
   callbacks: {
     async jwt({ token, user }) {
