@@ -23,6 +23,7 @@ import toast from 'react-hot-toast';
 import { formatModelName } from '@/lib/utils/modelFormatter';
 import InteractiveSection from './InteractiveSection';
 import ReportMetricsTicker from './ReportMetricsTicker';
+import { EntityChips } from '@/components/entities/EntityChips';
 
 interface Report {
   _id: string;
@@ -432,6 +433,11 @@ export default function ReportDisplay({
           </div>
         </div>
       )}
+
+      {/* Entity Chips */}
+      <div className="px-4 py-3 border-b bg-muted/10">
+        <EntityChips reportId={report._id} />
+      </div>
 
       {/* Report Content */}
       <ScrollArea className="flex-1 px-4 py-4">

@@ -10,6 +10,7 @@ import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
 import { trackReportUsage } from '@/lib/ai/usage-tracker';
 import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
+import { syncReportToPrisma } from '@/lib/utils/report-sync';
 
 // System prompt for financial report generation with AssetWorks branding
 const FINANCIAL_REPORT_PROMPT = `You are an expert financial analyst and data visualization specialist. Your role is to:
@@ -531,6 +532,21 @@ export async function POST(
           'message_created'
         ).catch((error) => {
           console.error('Failed to update thread snapshot:', error);
+        });
+
+        // Sync report to Prisma and extract entities (non-blocking)
+        syncReportToPrisma({
+          _id: report._id.toString(),
+          threadId,
+          htmlContent: accumulatedContent,
+          metadata: {
+            generatedBy: session.user.email || session.user.id,
+            prompt: content,
+            model,
+            provider,
+          },
+        }).catch((error) => {
+          console.error('Failed to sync report to Prisma:', error);
         });
 
         // Send completion event
