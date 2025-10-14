@@ -86,23 +86,7 @@ export const authOptions: NextAuthOptions = {
     secret: process.env.NEXTAUTH_SECRET,
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  cookies: {
-    sessionToken: {
-      name: `next-auth.session-token`,
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 30 * 24 * 60 * 60, // 30 days
-        domain: process.env.NODE_ENV === 'production'
-          ? process.env.NEXTAUTH_URL?.includes('netlify.app')
-            ? '.netlify.app'
-            : undefined
-          : undefined,
-      },
-    },
-  },
+  // Let NextAuth handle cookie configuration automatically
   useSecureCookies: process.env.NODE_ENV === 'production',
   pages: {
     signIn: '/auth/signin',
