@@ -104,7 +104,8 @@ model report_sections {
   metadata    Json?       @default("{}")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime
-  reports     reports     @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reports     reports           @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  entity_mentions entity_mentions[]
 
   @@index([reportId, order])
 }
@@ -122,6 +123,7 @@ model reports {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime
   report_sections report_sections[]
+  entity_mentions entity_mentions[]
   users           users             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
@@ -253,6 +255,126 @@ model widgets {
   @@index([userId])
 }
 
+// ============================================
+// Entity Intelligence System
+// ============================================
+
+model entities {
+  id          String   @id @default(cuid())
+  name        String   // "Airtel", "Apple Inc.", "Elon Musk"
+  slug        String   @unique // "airtel", "apple-inc", "elon-musk"
+  type        EntityType
+
+  // Primary identifiers
+  ticker      String?  // Stock ticker: "BHARTIARTL.NS"
+  isin        String?  // International Securities ID
+  cik         String?  // SEC CIK number
+  lei         String?  // Legal Entity Identifier
+
+  // Basic info
+  description String?  @db.Text
+  logo        String?  // Logo URL
+  website     String?
+  industry    String?
+  sector      String?
+  headquarters String?
+
+  // Aggregated data (updated by AI)
+  masterMarkdown String? @db.Text // The main entity.md content
+  summary        String? @db.Text // AI-generated summary
+  trendingTopics Json?   @default("[]") // Array of trending topics
+
+  // Metadata
+  mentionCount   Int      @default(0) // Total times mentioned across all reports
+  lastMentioned  DateTime?
+  firstMentioned DateTime?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  mentions entity_mentions[]
+  insights entity_insights[]
+  tags     entity_tags[]
+
+  @@index([slug])
+  @@index([type, mentionCount(sort: Desc)])
+  @@index([ticker])
+}
+
+model entity_mentions {
+  id       String   @id @default(cuid())
+  entityId String
+  reportId String
+
+  // Context of mention
+  context     String? @db.Text // Surrounding text where entity was mentioned
+  sentiment   Float?  // -1.0 to 1.0 (negative to positive)
+  relevance   Float?  // 0.0 to 1.0 (how relevant entity is to report)
+
+  // Section where mentioned
+  sectionId   String?
+  sectionType SectionType?
+
+  // Extracted metadata from mention
+  metadata Json? @default("{}") // { "metric": "revenue", "value": "1.2B", etc. }
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  entity  entities       @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  report  reports        @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  section report_sections? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@unique([entityId, reportId])
+  @@index([entityId, createdAt(sort: Desc)])
+  @@index([reportId])
+}
+
+model entity_insights {
+  id       String      @id @default(cuid())
+  entityId String
+
+  type    InsightType // TREND, COMPARISON, PREDICTION, SUMMARY, etc.
+  title   String      @db.VarChar(300)
+  content String      @db.Text
+
+  // Source reports that contributed to this insight
+  sourceReportIds String[] @default([])
+
+  // Insight metadata
+  confidence Float?  // 0.0 to 1.0
+  timeframe  String? // "Q4 2024", "Last 30 days", etc.
+  category   String? // "Financial", "Market", "Strategic", etc.
+
+  // AI generation metadata
+  model  String? @db.VarChar(100)
+  prompt String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  entity entities @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId, createdAt(sort: Desc)])
+  @@index([type])
+}
+
+model entity_tags {
+  id       String   @id @default(cuid())
+  entityId String
+  tag      String   // "telecom", "5G", "dividend-stock", etc.
+
+  createdAt DateTime @default(now())
+
+  entity entities @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, tag])
+  @@index([tag])
+}
+
 enum ApiProvider {
   OPENAI
   ANTHROPIC
@@ -304,4 +426,30 @@ enum UserPlan {
   FREE
   PRO
   ENTERPRISE
+}
+
+enum EntityType {
+  COMPANY
+  STOCK
+  PERSON
+  PRODUCT
+  SECTOR
+  CRYPTOCURRENCY
+  COMMODITY
+  INDEX
+  ETF
+  MUTUAL_FUND
+  COUNTRY
+  CURRENCY
+}
+
+enum InsightType {
+  TREND          // Trending topic or pattern
+  COMPARISON     // Comparison with peers
+  PREDICTION     // Future prediction
+  SUMMARY        // Overview summary
+  RISK           // Risk analysis
+  OPPORTUNITY    // Growth opportunity
+  METRIC         // Key metric highlight
+  NEWS           // Recent news summary
 }
