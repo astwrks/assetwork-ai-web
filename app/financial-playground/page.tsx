@@ -326,12 +326,17 @@ export default function FinancialPlaygroundPage() {
       } else if (response.status === 401) {
         // Not authenticated, redirect will happen via useEffect
         console.log('Not authenticated, threads not loaded');
+        return; // Exit early, don't show error
       } else {
-        throw new Error('Failed to load threads');
+        console.error('Failed to load threads, status:', response.status);
+        toast.error('Failed to load conversations');
       }
     } catch (error) {
       console.error('Error loading threads:', error);
-      toast.error('Failed to load conversations');
+      // Only show error if it's not an authentication issue
+      if (error instanceof Error && !error.message.includes('401')) {
+        toast.error('Failed to load conversations');
+      }
     }
   };
 
