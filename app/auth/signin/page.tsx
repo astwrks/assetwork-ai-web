@@ -34,7 +34,8 @@ function SignInForm() {
         toast.error(result.error);
       } else {
         toast.success('Welcome back!');
-        router.push(callbackUrl);
+        // Use window.location for a hard redirect to ensure session is loaded
+        window.location.href = callbackUrl;
       }
     } catch (error) {
       toast.error('An error occurred. Please try again.');

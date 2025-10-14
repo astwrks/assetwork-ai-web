@@ -61,7 +61,8 @@ export default function SignUpPage() {
         });
 
         if (result?.ok) {
-          router.push('/dashboard');
+          // Use window.location for a hard redirect to ensure session is loaded
+          window.location.href = '/dashboard';
         }
       }
     } catch (error: any) {
