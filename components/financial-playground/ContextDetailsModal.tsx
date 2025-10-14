@@ -43,10 +43,14 @@ export default function ContextDetailsModal({
     setError(null);
     try {
       const response = await fetch(
-        `/api/playground/${entityType}s/${entityId}/context-markdown`
+        `/api/playground/${entityType}s/${entityId}/context-markdown`,
+        {
+          credentials: 'include', // Include cookies for authentication
+        }
       );
       if (!response.ok) {
-        throw new Error('Failed to fetch context');
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(error.error || `Failed to fetch context (${response.status})`);
       }
       const data = await response.json();
       setMarkdownContent(data.markdown || '');
@@ -67,6 +71,7 @@ export default function ContextDetailsModal({
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include', // Include cookies for authentication
           body: JSON.stringify({
             currentContent: markdownContent,
           }),
@@ -74,7 +79,8 @@ export default function ContextDetailsModal({
       );
 
       if (!response.ok) {
-        throw new Error('Failed to compress context');
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(error.error || `Failed to compress context (${response.status})`);
       }
 
       const data = await response.json();
