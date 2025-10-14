@@ -3,11 +3,11 @@ import { reportCombinerService } from '@/lib/services/report-combiner.service';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ reportId: string }> }
 ) {
   try {
-    const { id } = await params;
-    const report = reportCombinerService.getReport(id);
+    const { reportId } = await params;
+    const report = reportCombinerService.getReport(reportId);
     
     if (!report) {
       return new NextResponse('Report not found', { status: 404 });
