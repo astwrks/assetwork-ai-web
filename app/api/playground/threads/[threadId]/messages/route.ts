@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
 import { connectToDatabase } from '@/lib/db/mongodb';
 import Thread from '@/lib/db/models/Thread';
 import Message from '@/lib/db/models/Message';
@@ -8,6 +9,7 @@ import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
 import { trackReportUsage } from '@/lib/ai/usage-tracker';
+import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
 
 // System prompt for financial report generation with AssetWorks branding
 const FINANCIAL_REPORT_PROMPT = `You are an expert financial analyst and data visualization specialist. Your role is to:
@@ -297,8 +299,8 @@ export async function POST(
   { params }: { params: Promise<{ threadId: string }> }
 ) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 });
     }
 
@@ -318,9 +320,9 @@ export async function POST(
       return new Response('Thread not found', { status: 404 });
     }
 
-    const isOwner = thread.userId === session.user.email;
+    const isOwner = thread.userId === session.user.id;
     const hasEditAccess = thread.sharedWith.some(
-      (share) => share.userId === session.user.email && share.permission === 'edit'
+      (share) => share.userId === session.user.id && share.permission === 'edit'
     );
 
     if (!isOwner && !hasEditAccess) {
@@ -523,6 +525,14 @@ export async function POST(
         });
         await assistantMessage.save();
 
+        // Update context snapshot in background (non-blocking)
+        ContextSnapshotService.createOrUpdateThreadSnapshot(
+          threadId,
+          'message_created'
+        ).catch((error) => {
+          console.error('Failed to update thread snapshot:', error);
+        });
+
         // Send completion event
         const completeChunk = `data: ${JSON.stringify({
           type: 'complete',
@@ -658,8 +668,8 @@ export async function GET(
   { params }: { params: Promise<{ threadId: string }> }
 ) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -673,9 +683,9 @@ export async function GET(
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
-    const isOwner = thread.userId === session.user.email;
+    const isOwner = thread.userId === session.user.id;
     const hasAccess = thread.sharedWith.some(
-      (share) => share.userId === session.user.email
+      (share) => share.userId === session.user.id
     );
 
     if (!isOwner && !hasAccess) {

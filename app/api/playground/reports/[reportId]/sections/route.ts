@@ -7,6 +7,7 @@ import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
 import { trackReportUsage } from '@/lib/ai/usage-tracker';
+import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
 
 // GET /api/playground/reports/:reportId/sections - Get all sections for a report
 export async function GET(
@@ -392,6 +393,14 @@ Generate a professional, visually stunning section now:`;
           report.sectionRefs.push(newSection._id.toString());
         }
         await report.save();
+
+        // Update context snapshot in background (non-blocking)
+        ContextSnapshotService.createOrUpdateReportSnapshot(
+          reportId,
+          'section_added'
+        ).catch((error) => {
+          console.error('Failed to update report snapshot:', error);
+        });
 
         // Get updated usage data for immediate client update
         const updatedReport = await PlaygroundReport.findById(reportId).select('usage').lean();

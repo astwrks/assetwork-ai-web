@@ -6,6 +6,7 @@ import ReportSection from '@/lib/db/models/ReportSection';
 import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
+import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
 
 // GET /api/playground/reports/:reportId/sections/:sectionId - Get specific section
 export async function GET(
@@ -129,6 +130,14 @@ export async function PATCH(
         await report.save();
       }
 
+      // Update context snapshot in background (non-blocking)
+      ContextSnapshotService.createOrUpdateReportSnapshot(
+        reportId,
+        'section_duplicated'
+      ).catch((error) => {
+        console.error('Failed to update report snapshot:', error);
+      });
+
       return NextResponse.json({ section: newSection }, { status: 201 });
     }
 
@@ -202,6 +211,14 @@ Return only the HTML content, no explanations.`;
             prompt
           );
 
+          // Update context snapshot in background (non-blocking)
+          ContextSnapshotService.createOrUpdateReportSnapshot(
+            reportId,
+            'section_edited'
+          ).catch((error) => {
+            console.error('Failed to update report snapshot:', error);
+          });
+
           // Send completion event
           const completeChunk = `data: ${JSON.stringify({
             type: 'complete',
@@ -244,6 +261,14 @@ Return only the HTML content, no explanations.`;
 
     section.metadata.lastModifiedBy = session.user.email!;
     await section.save();
+
+    // Update context snapshot in background (non-blocking)
+    ContextSnapshotService.createOrUpdateReportSnapshot(
+      reportId,
+      'section_updated'
+    ).catch((error) => {
+      console.error('Failed to update report snapshot:', error);
+    });
 
     return NextResponse.json({ section }, { status: 200 });
   } catch (error) {
@@ -298,6 +323,14 @@ export async function DELETE(
       );
       await report.save();
     }
+
+    // Update context snapshot in background (non-blocking)
+    ContextSnapshotService.createOrUpdateReportSnapshot(
+      reportId,
+      'section_deleted'
+    ).catch((error) => {
+      console.error('Failed to update report snapshot:', error);
+    });
 
     return NextResponse.json(
       { message: 'Section deleted successfully' },
