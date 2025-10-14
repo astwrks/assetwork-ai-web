@@ -31,21 +31,21 @@ export default function ContextProgressBar({
 
   const sizeConfig = {
     sm: {
-      radius: 16,
-      stroke: 3,
-      fontSize: 'text-[8px]',
+      radius: 12,
+      stroke: 2.5,
+      fontSize: 'text-[7px]',
       labelSize: 'text-xs',
     },
     md: {
-      radius: 20,
-      stroke: 4,
-      fontSize: 'text-[10px]',
+      radius: 16,
+      stroke: 3,
+      fontSize: 'text-[9px]',
       labelSize: 'text-sm',
     },
     lg: {
-      radius: 28,
-      stroke: 5,
-      fontSize: 'text-xs',
+      radius: 22,
+      stroke: 4,
+      fontSize: 'text-[10px]',
       labelSize: 'text-base',
     },
   };

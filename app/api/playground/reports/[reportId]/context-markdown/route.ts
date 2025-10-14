@@ -26,9 +26,28 @@ export async function GET(
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
-    if (report.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    const reportUserId = report.userId?.toString();
+    const sessionUserId = session.user.id?.toString();
+    const isOwner = reportUserId === sessionUserId;
+
+    if (!isOwner) {
+      console.error('❌ Report context access denied:', {
+        reportId,
+        reportUserId,
+        sessionUserId,
+        isOwner
+      });
+      return NextResponse.json({
+        error: 'Access denied. You do not have permission to view this report context.',
+        debug: process.env.NODE_ENV === 'development' ? {
+          reportUserId,
+          sessionUserId,
+          isOwner
+        } : undefined
+      }, { status: 403 });
     }
+
+    console.log('✅ Report context access granted:', { reportId, isOwner });
 
     // Fetch sections
     const sections = await ReportSection.find({ reportId })

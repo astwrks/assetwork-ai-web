@@ -1,8 +1,73 @@
 /* Financial Playground Report Styles - AssetWorks Branding */
 
+/* AssetWorks Brand Colors */
+:root {
+  --assetworks-primary: #0052CC;
+  --assetworks-secondary: #172B4D;
+  --assetworks-accent: #00B8D9;
+  --assetworks-success: #36B37E;
+  --assetworks-warning: #FFAB00;
+  --assetworks-error: #FF5630;
+  --assetworks-dark: #0A0E1A;
+  --assetworks-gray-50: #F7F8FA;
+  --assetworks-gray-100: #E5E7EB;
+  --assetworks-gray-600: #4B5563;
+  --assetworks-gray-900: #111827;
+}
+
 .report-content {
-  font-family: "Euclid Circular A", -apple-system, BlinkMacSystemFont, sans-serif;
-  color: #2C3E50;
+  font-family: "Euclid Circular A", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--assetworks-gray-900);
+  line-height: 1.7;
+  font-size: 16px;
+}
+
+/* Typography */
+.report-content h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--assetworks-secondary);
+  margin: 2rem 0 1.5rem;
+  line-height: 1.2;
+  border-bottom: 3px solid var(--assetworks-primary);
+  padding-bottom: 0.75rem;
+}
+
+.report-content h2 {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--assetworks-secondary);
+  margin: 1.75rem 0 1rem;
+  line-height: 1.3;
+}
+
+.report-content h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--assetworks-gray-900);
+  margin: 1.5rem 0 0.75rem;
+  line-height: 1.4;
+}
+
+.report-content p {
+  margin: 1rem 0;
+  color: var(--assetworks-gray-600);
+}
+
+.report-content strong {
+  color: var(--assetworks-gray-900);
+  font-weight: 600;
+}
+
+.report-content a {
+  color: var(--assetworks-primary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-bottom-color 0.2s;
+}
+
+.report-content a:hover {
+  border-bottom-color: var(--assetworks-primary);
 }
 
 .report-section {
@@ -40,74 +105,190 @@
   font-family: inherit;
 }
 
-/* Table styling */
-.report-section table {
+/* Table styling - Professional Financial Tables */
+.report-section table,
+.report-content table {
   width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.5rem 0;
+  border: 1px solid var(--assetworks-gray-100);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 82, 204, 0.08);
 }
 
-.report-section table th {
-  background: rgba(27, 41, 81, 0.05);
-  padding: 0.75rem;
+.report-section table th,
+.report-content table th {
+  background: linear-gradient(180deg, var(--assetworks-primary), #0047B3);
+  padding: 1rem 1.25rem;
   text-align: left;
   font-weight: 600;
-  color: #1B2951;
-  border-bottom: 2px solid #E9ECEF;
-}
-
-.report-section table td {
-  padding: 0.75rem;
-  border-bottom: 1px solid #E9ECEF;
-  color: #2C3E50;
-}
-
-.report-section table tr:hover {
-  background: #F8F9FA;
-}
-
-/* Metric cards - AssetWorks gradient */
-.metric-card {
-  background: linear-gradient(135deg, #1B2951 0%, #405D80 100%);
   color: white;
-  padding: 1.5rem;
-  border-radius: 0.75rem;
-  box-shadow: 0 4px 6px rgba(27, 41, 81, 0.15);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-/* Insight badges */
-.insight-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+.report-section table td,
+.report-content table td {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--assetworks-gray-100);
+  color: var(--assetworks-gray-900);
+  font-size: 0.9375rem;
+}
+
+.report-section table tr:last-child td,
+.report-content table tr:last-child td {
+  border-bottom: none;
+}
+
+.report-section table tr:hover,
+.report-content table tbody tr:hover {
+  background: var(--assetworks-gray-50);
+  transition: background 0.15s ease;
+}
+
+/* Numeric cells - Right align */
+.report-section table td[data-type="number"],
+.report-content table td[data-type="number"],
+.report-section table td:has(.number),
+.report-content table td:has(.number) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
 
-.insight-badge.info {
-  background: rgba(27, 41, 81, 0.1);
-  color: #1B2951;
-  border: 1px solid rgba(27, 41, 81, 0.2);
+/* Striped rows alternative style */
+.report-section table.striped tbody tr:nth-child(even),
+.report-content table.striped tbody tr:nth-child(even) {
+  background: rgba(0, 82, 204, 0.02);
 }
 
-.insight-badge.warning {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fcd34d;
+/* Metric cards - AssetWorks branded */
+.metric-card,
+.report-content .metric-card {
+  background: linear-gradient(135deg, var(--assetworks-primary) 0%, var(--assetworks-secondary) 100%);
+  color: white;
+  padding: 1.75rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0, 82, 204, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.insight-badge.critical {
-  background: #fee2e2;
-  color: #DC3545;
-  border: 1px solid #fca5a5;
+.metric-card:hover,
+.report-content .metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 82, 204, 0.25);
 }
 
-.insight-badge.success {
-  background: #d1fae5;
-  color: #065f46;
-  border: 1px solid #6ee7b7;
+.metric-card .metric-value {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin: 0.5rem 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-card .metric-label {
+  font-size: 0.875rem;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.metric-card .metric-change {
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Card Variants */
+.metric-card.success {
+  background: linear-gradient(135deg, var(--assetworks-success) 0%, #2A9D69 100%);
+}
+
+.metric-card.warning {
+  background: linear-gradient(135deg, var(--assetworks-warning) 0%, #E69500 100%);
+}
+
+.metric-card.error {
+  background: linear-gradient(135deg, var(--assetworks-error) 0%, #D92F24 100%);
+}
+
+.metric-card.accent {
+  background: linear-gradient(135deg, var(--assetworks-accent) 0%, #0099B8 100%);
+}
+
+/* Info Cards */
+.report-content .info-card {
+  background: white;
+  border: 1px solid var(--assetworks-gray-100);
+  border-left: 4px solid var(--assetworks-primary);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  box-shadow: 0 2px 8px rgba(0, 82, 204, 0.08);
+}
+
+/* Insight badges - AssetWorks colors */
+.insight-badge,
+.report-content .insight-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: 1px solid;
+  transition: all 0.2s ease;
+}
+
+.insight-badge:hover,
+.report-content .insight-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.insight-badge.info,
+.report-content .insight-badge.info {
+  background: rgba(0, 82, 204, 0.1);
+  color: var(--assetworks-primary);
+  border-color: var(--assetworks-primary);
+}
+
+.insight-badge.warning,
+.report-content .insight-badge.warning {
+  background: rgba(255, 171, 0, 0.1);
+  color: var(--assetworks-warning);
+  border-color: var(--assetworks-warning);
+}
+
+.insight-badge.critical,
+.report-content .insight-badge.critical,
+.insight-badge.error,
+.report-content .insight-badge.error {
+  background: rgba(255, 86, 48, 0.1);
+  color: var(--assetworks-error);
+  border-color: var(--assetworks-error);
+}
+
+.insight-badge.success,
+.report-content .insight-badge.success {
+  background: rgba(54, 179, 126, 0.1);
+  color: var(--assetworks-success);
+  border-color: var(--assetworks-success);
+}
+
+.insight-badge.accent,
+.report-content .insight-badge.accent {
+  background: rgba(0, 184, 217, 0.1);
+  color: var(--assetworks-accent);
+  border-color: var(--assetworks-accent);
 }
 
 /* Loading animation */
@@ -120,13 +301,162 @@
   }
 }
 
+@keyframes shimmer-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.005);
+  }
+}
+
 .streaming-indicator {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-shimmer-pulse {
+  animation: shimmer-pulse 2s ease-in-out infinite;
+}
+
+/* Chart Containers */
+.report-content .chart-container {
+  background: white;
+  border: 1px solid var(--assetworks-gray-100);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  box-shadow: 0 2px 8px rgba(0, 82, 204, 0.08);
+}
+
+.report-content .chart-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--assetworks-secondary);
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--assetworks-gray-100);
+}
+
+/* Lists */
+.report-content ul,
+.report-content ol {
+  margin: 1rem 0;
+  padding-left: 1.75rem;
+}
+
+.report-content li {
+  margin: 0.5rem 0;
+  color: var(--assetworks-gray-600);
+  line-height: 1.6;
+}
+
+.report-content ul li::marker {
+  color: var(--assetworks-primary);
+}
+
+.report-content ol li::marker {
+  color: var(--assetworks-primary);
+  font-weight: 600;
+}
+
+/* Code blocks */
+.report-content code {
+  background: var(--assetworks-gray-50);
+  color: var(--assetworks-secondary);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+.report-content pre {
+  background: var(--assetworks-dark);
+  color: #E5E7EB;
+  padding: 1.25rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border: 1px solid var(--assetworks-gray-100);
+}
+
+.report-content pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+/* Blockquotes */
+.report-content blockquote {
+  border-left: 4px solid var(--assetworks-accent);
+  padding-left: 1.5rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: var(--assetworks-gray-600);
+  background: rgba(0, 184, 217, 0.05);
+  padding: 1rem 1.5rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+/* Print styles */
+@media print {
+  .report-content {
+    font-size: 12pt;
+  }
+
+  .report-section:hover::before,
+  .section-toolbar,
+  .hover-indicator {
+    display: none !important;
+  }
+
+  .metric-card,
+  .report-content .metric-card {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid var(--assetworks-gray-100);
+  }
+
+  .report-content table {
+    break-inside: avoid;
+  }
+
+  @page {
+    margin: 2cm;
+  }
 }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .report-section:hover::before {
     display: none;
+  }
+
+  .report-content h1 {
+    font-size: 2rem;
+  }
+
+  .report-content h2 {
+    font-size: 1.5rem;
+  }
+
+  .report-content h3 {
+    font-size: 1.25rem;
+  }
+
+  .metric-card,
+  .report-content .metric-card {
+    padding: 1.25rem;
+  }
+
+  .metric-card .metric-value {
+    font-size: 1.75rem;
+  }
+
+  .report-content table th,
+  .report-content table td {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
   }
 }

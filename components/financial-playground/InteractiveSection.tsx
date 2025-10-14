@@ -129,15 +129,15 @@ export default function InteractiveSection({
           ? 'ring-1 ring-gray-300'
           : ''
       }`}
-      onMouseEnter={() => !isInEditMode && setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => !isInEditMode && !isSelected && setIsHovered(true)}
+      onMouseLeave={() => !isInEditMode && setIsHovered(false)}
       onClick={isInEditMode ? undefined : onSelect}
-      style={{ cursor: isInEditMode ? 'default' : 'pointer' }}
+      style={{ cursor: isInEditMode ? 'default' : isSelected ? 'default' : 'pointer' }}
     >
       {/* Floating Toolbar */}
       {isSelected && (
-        <div className="section-toolbar absolute -top-12 left-0 right-0 z-50 flex items-center justify-center">
-          <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-2 py-1 flex items-center gap-1">
+        <div className="section-toolbar absolute -top-14 left-0 right-0 z-[60] flex items-center justify-center pointer-events-none">
+          <div className="bg-white border border-gray-300 rounded-lg shadow-2xl px-2 py-1.5 flex items-center gap-1 pointer-events-auto">
             {/* Collapse/Expand */}
             {onToggleCollapse && (
               <Button
@@ -169,8 +169,8 @@ export default function InteractiveSection({
                 e.stopPropagation();
                 onEdit(sectionId);
               }}
-              disabled={isOperating}
-              className="h-8"
+              disabled={isOperating || isInEditMode}
+              className="h-8 hover:bg-blue-50 hover:text-blue-600 transition-colors"
               title="Edit section"
             >
               <Edit className="w-4 h-4" />

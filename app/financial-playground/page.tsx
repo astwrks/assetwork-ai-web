@@ -56,6 +56,8 @@ import ShareDialog from '@/components/financial-playground/ShareDialog';
 import ContextProgressBar from '@/components/financial-playground/ContextProgressBar';
 import ContextDetailsModal from '@/components/financial-playground/ContextDetailsModal';
 import { EntityChips } from '@/components/entities/EntityChips';
+import ChartRenderer from '@/components/financial-playground/ChartRenderer';
+import MessageActions from '@/components/financial-playground/MessageActions';
 
 interface Thread {
   _id: string;
@@ -438,13 +440,18 @@ export default function FinancialPlaygroundPage() {
     const messageToSend = messageOverride || inputMessage;
 
     // Type guard: ensure messageToSend is a string
-    if (typeof messageToSend !== 'string' || !messageToSend.trim() || !currentThread) {
-      if (!currentThread) {
-        toast.error('Please create a new conversation first');
-      }
+    if (typeof messageToSend !== 'string' || !messageToSend.trim()) {
+      console.log('❌ Send blocked: empty message', { messageToSend, inputMessage });
       return;
     }
 
+    if (!currentThread) {
+      console.log('❌ Send blocked: no thread');
+      toast.error('Please create a new conversation first');
+      return;
+    }
+
+    console.log('✅ Sending message:', messageToSend);
     const userMessage = messageToSend.trim();
     setInputMessage('');
     setIsLoading(true);
@@ -1238,7 +1245,7 @@ export default function FinancialPlaygroundPage() {
                     {messages.map((message) => (
                       <div
                         key={message._id}
-                        className={`mb-4 ${
+                        className={`mb-4 group ${
                           message.role === 'user' ? 'text-right' : 'text-left'
                         }`}
                       >
@@ -1264,6 +1271,15 @@ export default function FinancialPlaygroundPage() {
                               })}
                             </div>
                           )}
+                          {/* Message Actions - Copy, Feedback, Add to Report */}
+                          <MessageActions
+                            messageId={message._id}
+                            content={message.content}
+                            createdAt={message.createdAt}
+                            threadId={currentThread?._id || ''}
+                            role={message.role}
+                            reportId={currentReport?._id}
+                          />
                         </div>
                       </div>
                     ))}
@@ -1384,7 +1400,11 @@ export default function FinancialPlaygroundPage() {
                     <div className="flex gap-2">
                       <Input
                         value={inputMessage}
-                        onChange={(e) => setInputMessage(e.target.value)}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          console.log('📝 Input changed:', newValue);
+                          setInputMessage(newValue);
+                        }}
                         onKeyPress={handleKeyPress}
                         placeholder={
                           editingContext
@@ -1395,6 +1415,7 @@ export default function FinancialPlaygroundPage() {
                         }
                         disabled={isLoading || !currentThread}
                         className="flex-1 chat-input-field"
+                        autoComplete="off"
                       />
                       {isLoading && streamingContent ? (
                         <Button
@@ -1407,9 +1428,19 @@ export default function FinancialPlaygroundPage() {
                         </Button>
                       ) : (
                         <Button
-                          onClick={sendMessage}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            console.log('🖱️ Send button clicked', {
+                              inputMessage,
+                              hasThread: !!currentThread,
+                              isLoading,
+                              trimmed: inputMessage.trim()
+                            });
+                            sendMessage();
+                          }}
                           disabled={isLoading || !currentThread || !inputMessage.trim()}
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                          type="button"
                         >
                           {isLoading ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -1430,41 +1461,21 @@ export default function FinancialPlaygroundPage() {
           {/* Report Panel (Right) */}
           <Panel defaultSize={70} minSize={50} id="report-panel">
             <div className="h-full flex flex-col bg-white">
-              {/* Usage Metrics Ticker - Show whenever we have a report */}
-              {currentReport && (
+              {/* Usage Metrics Ticker - Always show when thread exists */}
+              {currentThread && (
                 <ReportMetricsTicker
-                  reportId={currentReport._id}
+                  reportId={currentReport?._id || 'pending'}
                   streamingUsage={streamingUsage}
                   isStreaming={isLoading && !!streamingContent}
                   onContextClick={() => {
-                    const currentTokens = streamingUsage
-                      ? streamingUsage.inputTokens + streamingUsage.outputTokens
-                      : (currentReport.metadata?.tokens as number) || 0;
-                    handleOpenContextModal('report', currentReport._id, currentTokens);
+                    if (currentReport) {
+                      const currentTokens = streamingUsage
+                        ? streamingUsage.inputTokens + streamingUsage.outputTokens
+                        : (currentReport.metadata?.tokens as number) || 0;
+                      handleOpenContextModal('report', currentReport._id, currentTokens);
+                    }
                   }}
                 />
-              )}
-
-              {/* Exit Edit Mode Button */}
-              {editingContext && (
-                <div className="bg-blue-600 text-white px-4 py-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Edit className="w-4 h-4" />
-                    <span className="font-medium">Edit Mode Active</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setEditingContext(null);
-                      setSelectedSectionId(null);
-                    }}
-                    className="text-white hover:bg-blue-700 hover:text-white"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Exit Edit Mode
-                  </Button>
-                </div>
               )}
 
               {/* Insights Banner */}
@@ -1495,9 +1506,9 @@ export default function FinancialPlaygroundPage() {
                 </div>
               )}
 
-              {/* Entity Chips */}
+              {/* Entity Chips - Sticky below metrics ticker (only show when report exists) */}
               {currentReport && (
-                <div className="border-b border-gray-200 px-4 py-3 bg-gray-50">
+                <div className="sticky top-[40px] z-40 border-b border-gray-200 px-4 py-3 bg-gray-50/95 backdrop-blur-sm shadow-sm">
                   <EntityChips reportId={currentReport._id} />
                 </div>
               )}
@@ -1571,29 +1582,93 @@ export default function FinancialPlaygroundPage() {
                   </div>
                 ) : (
                   <div className="max-w-5xl mx-auto">
-                    {/* Convert to Interactive Button */}
-                    {currentReport && !currentReport.isInteractiveMode && !streamingContent && (
-                      <div className="mb-6 flex justify-center">
-                        <Button
-                          onClick={convertToInteractive}
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                        >
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          Convert to Interactive Mode
-                        </Button>
-                      </div>
-                    )}
-
-                    <div
-                      className="report-content prose prose-lg max-w-none"
-                      dangerouslySetInnerHTML={{
-                        __html: streamingContent || currentReport?.htmlContent || '',
-                      }}
+                    {/* Use ChartRenderer for interactive charts */}
+                    <ChartRenderer
+                      htmlContent={streamingContent || currentReport?.htmlContent || ''}
                     />
                   </div>
                 )}
                 <div ref={reportEndRef} />
               </ScrollArea>
+
+              {/* Bottom Sticky Action Bar */}
+              {currentReport && (() => {
+                console.log('🔍 Bottom bar debug:', {
+                  hasReport: !!currentReport,
+                  isInteractive: currentReport?.isInteractiveMode,
+                  hasEditingContext: !!editingContext,
+                  editingType: editingContext?.type,
+                  sectionsCount: sections.length
+                });
+                return true;
+              })() && (
+                <div className="sticky bottom-0 z-50 border-t border-gray-200 bg-white/95 backdrop-blur-sm shadow-lg">
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    {/* Left side - Status */}
+                    <div className="flex items-center gap-2">
+                      {editingContext ? (
+                        <>
+                          <Edit className="w-4 h-4 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-600">
+                            Editing Mode Active
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {editingContext.type === 'edit' ? 'Edit section via chat' : 'Add new section via chat'}
+                          </span>
+                        </>
+                      ) : currentReport.isInteractiveMode ? (
+                        <>
+                          <Sparkles className="w-4 h-4 text-green-600" />
+                          <span className="text-sm font-medium text-green-600">
+                            Interactive Mode
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {sections.length} editable sections
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-4 h-4 text-gray-600" />
+                          <span className="text-sm font-medium text-gray-600">
+                            Static Report
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            Convert to enable editing
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Right side - Actions */}
+                    <div className="flex items-center gap-2">
+                      {editingContext ? (
+                        <Button
+                          onClick={() => {
+                            setEditingContext(null);
+                            setSelectedSectionId(null);
+                            toast.success('Exited editing mode');
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                        >
+                          <X className="w-4 h-4" />
+                          Done Editing
+                        </Button>
+                      ) : !currentReport.isInteractiveMode && !streamingContent ? (
+                        <Button
+                          onClick={convertToInteractive}
+                          size="sm"
+                          className="gap-2 bg-primary hover:bg-primary/90"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          Convert to Interactive Mode
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </Panel>
         </PanelGroup>

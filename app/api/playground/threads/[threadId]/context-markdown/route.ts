@@ -28,14 +28,34 @@ export async function GET(
     }
 
     // Check access permissions
-    const isOwner = thread.userId === session.user.id;
-    const hasSharedAccess = thread.sharedWith.some(
-      (share) => share.userId === session.user.id
+    const threadUserId = thread.userId?.toString();
+    const sessionUserId = session.user.id?.toString();
+
+    const isOwner = threadUserId === sessionUserId;
+    const hasSharedAccess = thread.sharedWith?.some(
+      (share: any) => share.userId?.toString() === sessionUserId
     );
 
     if (!isOwner && !hasSharedAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      console.error('❌ Context access denied:', {
+        threadId,
+        threadUserId,
+        sessionUserId,
+        hasSharedWith: !!thread.sharedWith,
+        sharedWithLength: thread.sharedWith?.length || 0
+      });
+      return NextResponse.json({
+        error: 'Access denied. You do not have permission to view this thread context.',
+        debug: process.env.NODE_ENV === 'development' ? {
+          threadUserId,
+          sessionUserId,
+          isOwner,
+          hasSharedAccess
+        } : undefined
+      }, { status: 403 });
     }
+
+    console.log('✅ Context access granted:', { threadId, isOwner, hasSharedAccess });
 
     // Fetch messages
     const messages = await Message.find({ threadId })

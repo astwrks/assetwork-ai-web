@@ -77,6 +77,7 @@ import TemplateCard from '@/components/financial-playground/TemplateCard';
 import TemplateDetailDialog from '@/components/financial-playground/TemplateDetailDialog';
 import ShareDialog from '@/components/financial-playground/ShareDialog';
 import ReportMetricsTicker from '@/components/financial-playground/ReportMetricsTicker';
+import MessageActions from '@/components/financial-playground/MessageActions';
 import {
   Dialog,
   DialogContent,
@@ -1613,7 +1614,7 @@ export default function FinancialPlaygroundV2() {
                     <div
                       key={message._id}
                       className={cn(
-                        "flex gap-3",
+                        "flex gap-3 group",
                         message.role === 'assistant' && "bg-gray-50/70 py-4 px-3 rounded-lg"
                       )}
                     >
@@ -1689,6 +1690,15 @@ export default function FinancialPlaygroundV2() {
                             </span>
                           </div>
                         )}
+                        {/* Message Actions - Copy, Feedback, Add to Report */}
+                        <MessageActions
+                          messageId={message._id}
+                          content={message.content}
+                          createdAt={message.createdAt}
+                          threadId={activeThread?._id || ''}
+                          role={message.role}
+                          reportId={message.reportId}
+                        />
                       </div>
                     </div>
                   ))}

@@ -1,5 +1,6 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 import { prisma } from '@/lib/db/prisma';
+import crypto from 'crypto';
 
 interface ExtractedEntity {
   name: string;
@@ -141,6 +142,7 @@ Return ONLY the JSON array, no other text.`;
     if (!entity) {
       entity = await prisma.entities.create({
         data: {
+          id: crypto.randomUUID(),
           name: extracted.name,
           slug,
           type: extracted.type,
@@ -169,6 +171,7 @@ Return ONLY the JSON array, no other text.`;
     // Create mention
     await prisma.entity_mentions.create({
       data: {
+        id: crypto.randomUUID(),
         entityId: entity.id,
         reportId,
         context: extracted.context,

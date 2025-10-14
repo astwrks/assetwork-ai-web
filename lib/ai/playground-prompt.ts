@@ -37,6 +37,29 @@ ENHANCEMENT RULES:
 - Each enhancement makes the report MORE comprehensive
 - Support infinite enhancements
 
+CHART DATA GENERATION:
+For all financial charts, include data in JSON format using data attributes:
+
+1. Line Charts (for trends, price history):
+<div class="chart-container" data-chart-type="line" data-chart='{"data":[...],"config":{...}}'>
+  [Chart Placeholder - Will render interactively]
+</div>
+
+2. Bar Charts (for comparisons, metrics):
+<div class="chart-container" data-chart-type="bar" data-chart='{"data":[...],"config":{...}}'>
+  [Chart Placeholder - Will render interactively]
+</div>
+
+3. Pie Charts (for distributions, breakdowns):
+<div class="chart-container" data-chart-type="pie" data-chart='{"data":[...],"config":{...}}'>
+  [Chart Placeholder - Will render interactively]
+</div>
+
+Chart JSON Format Examples:
+- Line: {"data":[{"month":"Jan","value":100},...],"xAxisKey":"month","lines":[{"dataKey":"value","name":"Revenue"}],"title":"Monthly Revenue"}
+- Bar: {"data":[{"category":"Q1","sales":1000},...],"xAxisKey":"category","bars":[{"dataKey":"sales","name":"Sales"}],"title":"Quarterly Sales"}
+- Pie: {"data":[{"name":"Product A","value":400},...],"title":"Market Share"}
+
 OUTPUT FORMAT:
 <!DOCTYPE html>
 <html lang="en">
@@ -44,8 +67,6 @@ OUTPUT FORMAT:
     <meta charset="UTF-8">
     <title>[Company] - Comprehensive Financial Report</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 

@@ -1,5 +1,6 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 import { prisma } from '@/lib/db/prisma';
+import crypto from 'crypto';
 
 /**
  * Service for aggregating data from all reports mentioning an entity
@@ -28,9 +29,9 @@ export class EntityAggregationService {
     const entity = await prisma.entities.findUnique({
       where: { id: entityId },
       include: {
-        mentions: {
+        entity_mentions: {
           include: {
-            report: {
+            reports: {
               select: {
                 id: true,
                 title: true,
@@ -42,11 +43,11 @@ export class EntityAggregationService {
           orderBy: { createdAt: 'desc' },
           take: 50, // Last 50 mentions
         },
-        insights: {
+        entity_insights: {
           orderBy: { createdAt: 'desc' },
           take: 10,
         },
-        tags: true,
+        entity_tags: true,
       },
     });
 
@@ -55,9 +56,9 @@ export class EntityAggregationService {
     }
 
     // Prepare context for AI
-    const mentionsContext = entity.mentions.map((m) => ({
-      reportTitle: m.report.title,
-      reportDescription: m.report.description,
+    const mentionsContext = entity.entity_mentions.map((m) => ({
+      reportTitle: m.reports.title,
+      reportDescription: m.reports.description,
       context: m.context,
       sentiment: m.sentiment,
       relevance: m.relevance,
@@ -187,15 +188,15 @@ IMPORTANT:
     const entity = await prisma.entities.findUnique({
       where: { id: entityId },
       include: {
-        mentions: {
-          include: { report: true },
+        entity_mentions: {
+          include: { reports: true },
           orderBy: { createdAt: 'desc' },
           take: 20,
         },
       },
     });
 
-    if (!entity || entity.mentions.length === 0) {
+    if (!entity || entity.entity_mentions.length === 0) {
       return 0;
     }
 
@@ -209,7 +210,7 @@ IMPORTANT:
       console.error('Failed to generate summary insight:', error);
     }
 
-    if (entity.mentions.length >= 3) {
+    if (entity.entity_mentions.length >= 3) {
       try {
         await this.generateTrendInsight(entity);
         insightCount++;
@@ -229,7 +230,7 @@ IMPORTANT:
     const prompt = `Based on ${entity.mentionCount} mentions of "${entity.name}" across financial reports, create a 2-3 sentence executive summary highlighting the most important aspects.
 
 Recent mention contexts:
-${entity.mentions.slice(0, 5).map((m: any) => `- ${m.context}`).join('\n')}
+${entity.entity_mentions.slice(0, 5).map((m: any) => `- ${m.context}`).join('\n')}
 
 Write only the summary, no title or formatting.`;
 
@@ -252,11 +253,12 @@ Write only the summary, no title or formatting.`;
     // Create new summary insight
     await prisma.entity_insights.create({
       data: {
+        id: crypto.randomUUID(),
         entityId: entity.id,
         type: 'SUMMARY',
         title: `${entity.name} Overview`,
         content,
-        sourceReportIds: entity.mentions
+        sourceReportIds: entity.entity_mentions
           .slice(0, 5)
           .map((m: any) => m.reportId),
         model: 'claude-3-5-sonnet-20241022',
@@ -268,7 +270,7 @@ Write only the summary, no title or formatting.`;
    * Generate a trend insight
    */
   private async generateTrendInsight(entity: any) {
-    const sentiments = entity.mentions
+    const sentiments = entity.entity_mentions
       .filter((m: any) => m.sentiment !== null)
       .map((m: any) => ({
         date: m.createdAt,
@@ -315,11 +317,12 @@ Keep it to 2-3 sentences, be specific and data-driven.`;
     // Create new trend insight
     await prisma.entity_insights.create({
       data: {
+        id: crypto.randomUUID(),
         entityId: entity.id,
         type: 'TREND',
         title: `${entity.name} Sentiment Trend`,
         content,
-        sourceReportIds: entity.mentions.slice(0, 10).map((m: any) => m.reportId),
+        sourceReportIds: entity.entity_mentions.slice(0, 10).map((m: any) => m.reportId),
         model: 'claude-3-5-sonnet-20241022',
         metadata: { avgSentiment },
       },

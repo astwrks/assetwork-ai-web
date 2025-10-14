@@ -50,9 +50,22 @@ export default function ContextDetailsModal({
       );
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('❌ Context fetch failed:', {
+          status: response.status,
+          error,
+          entityType,
+          entityId
+        });
+        // Provide user-friendly error message
+        if (response.status === 403) {
+          throw new Error('Access denied. This may be because the thread or report was created by another user.');
+        } else if (response.status === 404) {
+          throw new Error(`${entityType === 'thread' ? 'Thread' : 'Report'} not found.`);
+        }
         throw new Error(error.error || `Failed to fetch context (${response.status})`);
       }
       const data = await response.json();
+      console.log('✅ Context loaded:', { entityType, entityId, markdownLength: data.markdown?.length });
       setMarkdownContent(data.markdown || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load context');

@@ -61,6 +61,11 @@ export default function ReportMetricsTicker({
   }, [reportId]);
 
   const fetchUsage = async () => {
+    // Skip fetching if no report exists yet
+    if (reportId === 'pending' || !reportId) {
+      return;
+    }
+
     try {
       const response = await fetch(
         `/api/playground/reports/${reportId}/usage`
@@ -96,6 +101,11 @@ export default function ReportMetricsTicker({
 
   // Poll for usage updates with dynamic interval
   useEffect(() => {
+    // Only fetch and poll if we have a real report ID
+    if (reportId === 'pending' || !reportId) {
+      return;
+    }
+
     // Fetch immediately on mount
     fetchUsage();
 
@@ -109,29 +119,36 @@ export default function ReportMetricsTicker({
     operationCount > 0 ? usage.totalCost / operationCount : 0;
 
   return (
-    <div className="sticky top-0 z-50 bg-[#0A0E1A] border-b border-[#1E2432] shadow-xl">
+    <div className="sticky top-0 z-50 bg-[#0A0E1A] border-b border-[#1E2432] shadow-xl backdrop-blur-sm">
+      {/* Streaming indicator bar */}
+      {isStreaming && (
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-yellow-400 via-orange-400 to-yellow-400 animate-pulse"></div>
+      )}
       <div className="max-w-full px-3 py-1.5">
         <div className="flex items-center justify-between gap-3 text-xs">
           {/* Left: Compact Metrics */}
           <div className="flex items-center gap-3 font-mono">
             {/* Tokens */}
             <div
-              className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all ${
+              className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all duration-300 ${
                 isStreaming
-                  ? 'bg-yellow-500/10 border border-yellow-500/30'
+                  ? 'bg-yellow-500/20 border border-yellow-500/50 shadow-lg shadow-yellow-500/20'
                   : 'border border-transparent'
               }`}
             >
-              <Zap className={`w-3 h-3 ${isStreaming ? 'text-yellow-400' : 'text-blue-400'}`} />
+              <Zap className={`w-3 h-3 transition-all ${isStreaming ? 'text-yellow-400 animate-pulse' : 'text-blue-400'}`} />
               <div className="flex items-center gap-1">
                 <span className="text-gray-500 uppercase text-[10px] tracking-wider">TKN</span>
-                <span className={`font-bold ${isStreaming ? 'text-yellow-300' : 'text-white'}`}>
+                <span className={`font-bold transition-all ${isStreaming ? 'text-yellow-300 scale-110' : 'text-white'}`}>
                   {isStreaming && streamingUsage
                     ? formatTokens(streamingUsage.inputTokens + streamingUsage.outputTokens)
                     : formatTokens(usage.totalTokens)}
                 </span>
                 {isStreaming && streamingUsage && (
-                  <span className="text-[9px] text-yellow-400 font-bold">●</span>
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-[9px] text-yellow-400 font-bold animate-pulse">●</span>
+                    <span className="text-[8px] text-yellow-400 font-mono">LIVE</span>
+                  </div>
                 )}
               </div>
             </div>
