@@ -24,22 +24,14 @@ function SignInForm() {
     setLoading(true);
 
     try {
-      const result = await signIn('credentials', {
+      // Let NextAuth handle the redirect automatically
+      await signIn('credentials', {
         email,
         password,
-        redirect: false,
+        callbackUrl,
       });
-
-      if (result?.error) {
-        toast.error(result.error);
-      } else {
-        toast.success('Welcome back!');
-        // Use window.location for a hard redirect to ensure session is loaded
-        window.location.href = callbackUrl;
-      }
     } catch (error) {
       toast.error('An error occurred. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
