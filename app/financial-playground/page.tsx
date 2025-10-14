@@ -311,6 +311,11 @@ export default function FinancialPlaygroundPage() {
       if (response.ok) {
         const data = await response.json();
         setThreads(data.threads);
+      } else if (response.status === 401) {
+        // Not authenticated, redirect will happen via useEffect
+        console.log('Not authenticated, threads not loaded');
+      } else {
+        throw new Error('Failed to load threads');
       }
     } catch (error) {
       console.error('Error loading threads:', error);
