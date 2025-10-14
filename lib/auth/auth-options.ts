@@ -5,6 +5,16 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/db/prisma';
 import { comparePassword } from './password';
 
+// Validate environment variables in production
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.NEXTAUTH_URL) {
+    throw new Error('NEXTAUTH_URL environment variable is required in production');
+  }
+  if (!process.env.NEXTAUTH_SECRET || process.env.NEXTAUTH_SECRET === 'your-nextauth-secret-here-change-in-production') {
+    throw new Error('NEXTAUTH_SECRET must be set to a strong secret in production');
+  }
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -85,6 +95,11 @@ export const authOptions: NextAuthOptions = {
         path: '/',
         secure: process.env.NODE_ENV === 'production',
         maxAge: 30 * 24 * 60 * 60, // 30 days
+        domain: process.env.NODE_ENV === 'production'
+          ? process.env.NEXTAUTH_URL?.includes('netlify.app')
+            ? '.netlify.app'
+            : undefined
+          : undefined,
       },
     },
   },
