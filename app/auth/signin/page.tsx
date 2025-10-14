@@ -24,13 +24,32 @@ function SignInForm() {
     setLoading(true);
 
     try {
-      // Let NextAuth handle the redirect automatically
-      await signIn('credentials', {
+      // Use redirect: false to handle errors properly
+      const result = await signIn('credentials', {
         email,
         password,
-        callbackUrl,
+        redirect: false,
       });
+
+      console.log('SignIn result:', result);
+
+      if (result?.error) {
+        // Show specific error
+        toast.error(result.error === 'CredentialsSignin'
+          ? 'Invalid email or password'
+          : result.error);
+        setLoading(false);
+      } else if (result?.ok) {
+        // Success! Force a full page navigation
+        toast.success('Welcome back!');
+        window.location.href = callbackUrl;
+      } else {
+        // Unknown state
+        toast.error('Sign in failed. Please try again.');
+        setLoading(false);
+      }
     } catch (error) {
+      console.error('SignIn error:', error);
       toast.error('An error occurred. Please try again.');
       setLoading(false);
     }
