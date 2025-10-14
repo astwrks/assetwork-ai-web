@@ -186,6 +186,18 @@ export default function FinancialPlaygroundPage() {
     }
   }, [session]);
 
+  // Auto-create first thread if user has none
+  useEffect(() => {
+    // Only run if session exists, threads array is loaded (even if empty), and we don't have a current thread
+    if (!session || threads === undefined) return;
+
+    // If user has no threads and no current thread, auto-create one
+    if (threads.length === 0 && !currentThread && !justCreatedThreadRef.current) {
+      console.log('No threads found - auto-creating first thread');
+      createNewThread();
+    }
+  }, [threads, session, currentThread]);
+
   // Handle URL thread parameter and restore last thread
   useEffect(() => {
     if (threads.length === 0 || !session) return;
