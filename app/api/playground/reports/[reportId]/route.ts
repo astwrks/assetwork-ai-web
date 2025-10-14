@@ -31,9 +31,15 @@ export async function GET(
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
-    const isOwner = thread.userId === session.user.email;
+    // Check access using both email and id for compatibility
+    const userIdentifier = session.user.email || session.user.id;
+    const isOwner = thread.userId === userIdentifier ||
+                    thread.userId === session.user.id ||
+                    thread.userId === session.user.email;
     const hasAccess = thread.sharedWith.some(
-      (share) => share.userId === session.user.email
+      (share: any) => share.userId === userIdentifier ||
+                      share.userId === session.user.id ||
+                      share.userId === session.user.email
     );
 
     if (!isOwner && !hasAccess) {
