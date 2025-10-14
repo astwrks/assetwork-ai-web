@@ -53,6 +53,8 @@ import EditingContext from '@/components/financial-playground/EditingContext';
 import AddSectionButton from '@/components/financial-playground/AddSectionButton';
 import ReportMetricsTicker from '@/components/financial-playground/ReportMetricsTicker';
 import ShareDialog from '@/components/financial-playground/ShareDialog';
+import ContextProgressBar from '@/components/financial-playground/ContextProgressBar';
+import ContextDetailsModal from '@/components/financial-playground/ContextDetailsModal';
 
 interface Thread {
   _id: string;
@@ -129,6 +131,8 @@ export default function FinancialPlaygroundPage() {
   const [streamingUsage, setStreamingUsage] = useState<{inputTokens: number; outputTokens: number} | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [isContextModalOpen, setIsContextModalOpen] = useState(false);
+  const [contextModalEntity, setContextModalEntity] = useState<{type: 'thread' | 'report'; id: string; tokens: number} | null>(null);
 
   // Interactive sections state
   const [sections, setSections] = useState<Section[]>([]);
@@ -948,6 +952,12 @@ export default function FinancialPlaygroundPage() {
     setIsShareDialogOpen(true);
   };
 
+  // Handle context progress bar click - open context modal
+  const handleOpenContextModal = (type: 'thread' | 'report', id: string, tokens: number) => {
+    setContextModalEntity({ type, id, tokens });
+    setIsContextModalOpen(true);
+  };
+
   if (status === 'loading') {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1291,6 +1301,35 @@ export default function FinancialPlaygroundPage() {
                     />
                   )}
 
+                  {/* Context Usage Progress Bar */}
+                  {currentThread && (
+                    <div className="border-t border-gray-100 px-4 py-2 bg-gray-50">
+                      <button
+                        className="w-full flex items-center justify-between hover:bg-gray-100 transition-colors rounded px-2 py-1"
+                        onClick={() => {
+                          const currentTokens = messages.reduce((sum, m) => {
+                            const tokens = m.metadata?.tokens;
+                            return sum + (typeof tokens === 'number' ? tokens : 0);
+                          }, 0) + (streamingUsage ? streamingUsage.inputTokens + streamingUsage.outputTokens : 0);
+                          handleOpenContextModal('thread', currentThread._id, currentTokens);
+                        }}
+                        title="Click to view thread context"
+                      >
+                        <span className="text-xs font-medium text-gray-600">Context Usage:</span>
+                        <ContextProgressBar
+                          currentTokens={
+                            messages.reduce((sum, m) => {
+                              const tokens = m.metadata?.tokens;
+                              return sum + (typeof tokens === 'number' ? tokens : 0);
+                            }, 0) + (streamingUsage ? streamingUsage.inputTokens + streamingUsage.outputTokens : 0)
+                          }
+                          size="sm"
+                          showLabel={false}
+                        />
+                      </button>
+                    </div>
+                  )}
+
                   {/* System Prompt Selector */}
                   {systemPrompts.length > 0 && (
                     <div className="border-t border-gray-100 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50">
@@ -1370,7 +1409,17 @@ export default function FinancialPlaygroundPage() {
             <div className="h-full flex flex-col bg-white">
               {/* Usage Metrics Ticker - Show whenever we have a report */}
               {currentReport && (
-                <ReportMetricsTicker reportId={currentReport._id} />
+                <ReportMetricsTicker
+                  reportId={currentReport._id}
+                  streamingUsage={streamingUsage}
+                  isStreaming={isLoading && !!streamingContent}
+                  onContextClick={() => {
+                    const currentTokens = streamingUsage
+                      ? streamingUsage.inputTokens + streamingUsage.outputTokens
+                      : (currentReport.metadata?.tokens as number) || 0;
+                    handleOpenContextModal('report', currentReport._id, currentTokens);
+                  }}
+                />
               )}
 
               {/* Exit Edit Mode Button */}
@@ -1528,6 +1577,20 @@ export default function FinancialPlaygroundPage() {
         reportId={currentReport?._id}
         userEmail={session?.user?.email}
       />
+
+      {/* Context Details Modal */}
+      {contextModalEntity && (
+        <ContextDetailsModal
+          isOpen={isContextModalOpen}
+          onClose={() => {
+            setIsContextModalOpen(false);
+            setContextModalEntity(null);
+          }}
+          entityType={contextModalEntity.type}
+          entityId={contextModalEntity.id}
+          currentTokens={contextModalEntity.tokens}
+        />
+      )}
     </div>
   );
 }

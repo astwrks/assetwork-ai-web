@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { DollarSign, Zap, TrendingUp, Activity } from 'lucide-react';
 import { formatCost, formatTokens } from '@/lib/ai/pricing';
+import ContextProgressBar from './ContextProgressBar';
 
 interface ReportUsage {
   totalTokens: number;
@@ -22,12 +23,18 @@ interface ReportMetricsTickerProps {
   reportId: string;
   initialUsage?: ReportUsage;
   onUsageUpdate?: (usage: ReportUsage) => void; // Callback for parent to know about updates
+  streamingUsage?: { inputTokens: number; outputTokens: number } | null; // Real-time streaming usage
+  isStreaming?: boolean; // Whether generation is in progress
+  onContextClick?: () => void; // Callback when context progress bar is clicked
 }
 
 export default function ReportMetricsTicker({
   reportId,
   initialUsage,
   onUsageUpdate,
+  streamingUsage,
+  isStreaming = false,
+  onContextClick,
 }: ReportMetricsTickerProps) {
   const [usage, setUsage] = useState<ReportUsage>(
     initialUsage || {
@@ -102,130 +109,116 @@ export default function ReportMetricsTicker({
     operationCount > 0 ? usage.totalCost / operationCount : 0;
 
   return (
-    <div className="sticky top-0 z-50 bg-gradient-to-r from-[#1B2951] to-[#405D80] border-b border-blue-900 shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 py-3">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          {/* Left: Report Metrics Title */}
-          <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-blue-300" />
-            <span className="text-sm font-semibold text-white">
-              Report Usage Metrics
-            </span>
-          </div>
-
-          {/* Center: Main Metrics */}
-          <div className="flex items-center gap-6 flex-wrap">
-            {/* Total Tokens */}
+    <div className="sticky top-0 z-50 bg-[#0A0E1A] border-b border-[#1E2432] shadow-xl">
+      <div className="max-w-full px-3 py-1.5">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          {/* Left: Compact Metrics */}
+          <div className="flex items-center gap-3 font-mono">
+            {/* Tokens */}
             <div
-              className={`flex items-center gap-2 transition-all duration-300 ${
-                isAnimating ? 'scale-110' : 'scale-100'
+              className={`flex items-center gap-1.5 px-2 py-1 rounded transition-all ${
+                isStreaming
+                  ? 'bg-yellow-500/10 border border-yellow-500/30'
+                  : 'border border-transparent'
               }`}
             >
-              <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/20">
-                <Zap className="w-4 h-4 text-yellow-300" />
-                <div className="flex flex-col">
-                  <span className="text-xs text-blue-200 font-medium">
-                    Tokens
-                  </span>
-                  <span className="text-sm font-bold text-white">
-                    {formatTokens(usage.totalTokens)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Total Cost */}
-            <div
-              className={`flex items-center gap-2 transition-all duration-300 ${
-                isAnimating ? 'scale-110' : 'scale-100'
-              }`}
-            >
-              <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/20">
-                <DollarSign className="w-4 h-4 text-green-300" />
-                <div className="flex flex-col">
-                  <span className="text-xs text-blue-200 font-medium">
-                    Total Cost
-                  </span>
-                  <span className="text-sm font-bold text-white">
-                    {formatCost(usage.totalCost)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Operations Count */}
-            <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/20">
-              <TrendingUp className="w-4 h-4 text-purple-300" />
-              <div className="flex flex-col">
-                <span className="text-xs text-blue-200 font-medium">
-                  Operations
+              <Zap className={`w-3 h-3 ${isStreaming ? 'text-yellow-400' : 'text-blue-400'}`} />
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500 uppercase text-[10px] tracking-wider">TKN</span>
+                <span className={`font-bold ${isStreaming ? 'text-yellow-300' : 'text-white'}`}>
+                  {isStreaming && streamingUsage
+                    ? formatTokens(streamingUsage.inputTokens + streamingUsage.outputTokens)
+                    : formatTokens(usage.totalTokens)}
                 </span>
-                <span className="text-sm font-bold text-white">
-                  {operationCount}
-                </span>
+                {isStreaming && streamingUsage && (
+                  <span className="text-[9px] text-yellow-400 font-bold">●</span>
+                )}
               </div>
             </div>
 
-            {/* Avg Cost per Operation */}
+            <div className="h-4 w-px bg-gray-700"></div>
+
+            {/* Cost */}
+            <div className="flex items-center gap-1.5 px-2 py-1">
+              <DollarSign className="w-3 h-3 text-green-400" />
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500 uppercase text-[10px] tracking-wider">COST</span>
+                <span className="font-bold text-green-300">{formatCost(usage.totalCost)}</span>
+              </div>
+            </div>
+
+            <div className="h-4 w-px bg-gray-700"></div>
+
+            {/* Operations */}
+            <div className="flex items-center gap-1.5 px-2 py-1">
+              <TrendingUp className="w-3 h-3 text-purple-400" />
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500 uppercase text-[10px] tracking-wider">OPS</span>
+                <span className="font-bold text-white">{operationCount}</span>
+              </div>
+            </div>
+
             {operationCount > 0 && (
-              <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/20">
-                <div className="flex flex-col">
-                  <span className="text-xs text-blue-200 font-medium">
-                    Avg/Op
-                  </span>
-                  <span className="text-sm font-bold text-white">
-                    {formatCost(avgCostPerOperation)}
-                  </span>
+              <>
+                <div className="h-4 w-px bg-gray-700"></div>
+                <div className="flex items-center gap-1 px-2 py-1">
+                  <span className="text-gray-500 uppercase text-[10px] tracking-wider">AVG</span>
+                  <span className="font-bold text-blue-300">{formatCost(avgCostPerOperation)}</span>
                 </div>
-              </div>
+              </>
             )}
           </div>
 
-          {/* Right: Live Indicator */}
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <div className="absolute inset-0 w-2 h-2 bg-green-400 rounded-full animate-ping"></div>
+          {/* Center: Breakdown */}
+          {usage.operations && usage.operations.length > 0 && (
+            <div className="flex items-center gap-3 text-[10px] text-gray-400 font-mono">
+              <span>
+                SEC <span className="text-white font-bold">{usage.operations.filter((op) => op.type === 'section_add').length}</span>
+              </span>
+              <span>
+                EDT <span className="text-white font-bold">{usage.operations.filter((op) => op.type === 'edit').length}</span>
+              </span>
+              <span>
+                SUG <span className="text-white font-bold">{usage.operations.filter((op) => op.type === 'suggestion').length}</span>
+              </span>
             </div>
-            <span className="text-xs text-blue-200 font-medium">
-              Live Tracking
-            </span>
+          )}
+
+          {/* Right: Context & Status */}
+          <div className="flex items-center gap-3">
+            {/* Context Progress Bar - Clickable */}
+            <button
+              className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/5 transition-colors"
+              onClick={onContextClick}
+              title="Click to view context details"
+            >
+              <ContextProgressBar
+                currentTokens={
+                  isStreaming && streamingUsage
+                    ? streamingUsage.inputTokens + streamingUsage.outputTokens
+                    : usage.totalTokens
+                }
+                size="sm"
+                showLabel={false}
+                showTooltip={false}
+              />
+              <span className="text-gray-400 uppercase text-[10px] tracking-wider font-mono">CTX</span>
+            </button>
+
+            <div className="h-4 w-px bg-gray-700"></div>
+
+            {/* Live Status */}
+            <div className="flex items-center gap-1.5 px-2 py-1">
+              <div className="relative">
+                <div className="w-1.5 h-1.5 bg-green-400 rounded-full"></div>
+                {isStreaming && (
+                  <div className="absolute inset-0 w-1.5 h-1.5 bg-green-400 rounded-full animate-ping"></div>
+                )}
+              </div>
+              <span className="text-gray-400 uppercase text-[10px] tracking-wider font-mono">LIVE</span>
+            </div>
           </div>
         </div>
-
-        {/* Bottom: Breakdown (Optional) */}
-        {usage.operations && usage.operations.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-blue-700/30">
-            <div className="flex items-center gap-4 text-xs text-blue-200">
-              <span>
-                Sections:{' '}
-                <span className="font-semibold text-white">
-                  {
-                    usage.operations.filter((op) => op.type === 'section_add')
-                      .length
-                  }
-                </span>
-              </span>
-              <span>"</span>
-              <span>
-                Edits:{' '}
-                <span className="font-semibold text-white">
-                  {usage.operations.filter((op) => op.type === 'edit').length}
-                </span>
-              </span>
-              <span>"</span>
-              <span>
-                Suggestions:{' '}
-                <span className="font-semibold text-white">
-                  {
-                    usage.operations.filter((op) => op.type === 'suggestion')
-                      .length
-                  }
-                </span>
-              </span>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
