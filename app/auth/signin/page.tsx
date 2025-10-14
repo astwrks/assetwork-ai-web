@@ -35,18 +35,28 @@ function SignInForm() {
 
       if (result?.error) {
         // Show specific error
+        console.error('SignIn error:', result.error);
         toast.error(result.error === 'CredentialsSignin'
           ? 'Invalid email or password'
           : result.error);
         setLoading(false);
-      } else if (result?.ok) {
-        // Success! Force a full page navigation
-        toast.success('Welcome back!');
-        window.location.href = callbackUrl;
       } else {
-        // Unknown state
-        toast.error('Sign in failed. Please try again.');
-        setLoading(false);
+        // If no error, assume success and redirect
+        console.log('SignIn successful, redirecting to:', callbackUrl);
+        toast.success('Welcome back!');
+
+        // Multiple redirect approaches to ensure it works
+        setTimeout(() => {
+          window.location.href = callbackUrl;
+        }, 100);
+
+        // Backup redirect after 1 second if first doesn't work
+        setTimeout(() => {
+          if (window.location.pathname === '/auth/signin') {
+            console.log('First redirect failed, trying again...');
+            window.location.replace(callbackUrl);
+          }
+        }, 1000);
       }
     } catch (error) {
       console.error('SignIn error:', error);

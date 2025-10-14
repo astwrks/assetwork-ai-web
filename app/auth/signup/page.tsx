@@ -60,9 +60,28 @@ export default function SignUpPage() {
           redirect: false,
         });
 
-        if (result?.ok) {
-          // Use window.location for a hard redirect to ensure session is loaded
-          window.location.href = '/dashboard';
+        if (!result?.error) {
+          // If no error, assume success and redirect
+          console.log('Auto-signin successful, redirecting to dashboard');
+
+          // Multiple redirect approaches to ensure it works
+          setTimeout(() => {
+            window.location.href = '/dashboard';
+          }, 100);
+
+          // Backup redirect
+          setTimeout(() => {
+            if (window.location.pathname === '/auth/signup') {
+              console.log('First redirect failed, trying again...');
+              window.location.replace('/dashboard');
+            }
+          }, 1000);
+        } else {
+          console.error('Auto-signin failed:', result.error);
+          toast.error('Account created but signin failed. Please sign in manually.');
+          setTimeout(() => {
+            window.location.href = '/auth/signin';
+          }, 2000);
         }
       }
     } catch (error: any) {
