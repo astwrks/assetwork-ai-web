@@ -43,7 +43,7 @@ export async function GET(
     const mentions = await prisma.entity_mentions.findMany({
       where: { reportId },
       include: {
-        entity: {
+        entities: {
           select: {
             id: true,
             name: true,
@@ -60,7 +60,7 @@ export async function GET(
     });
 
     const entities = mentions.map((m) => ({
-      ...m.entity,
+      ...m.entities,
       context: m.context,
       sentiment: m.sentiment,
       relevance: m.relevance,

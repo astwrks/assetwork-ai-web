@@ -47,7 +47,7 @@ const SectionVersionSchema = new Schema<SectionVersion>(
 
 const ReportSectionSchema = new Schema<ReportSectionDocument>(
   {
-    reportId: { type: String, required: true, index: true },
+    reportId: { type: String, required: true },
     type: {
       type: String,
       enum: ['metric', 'chart', 'table', 'text', 'insight', 'custom'],

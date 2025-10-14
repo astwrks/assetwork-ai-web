@@ -10,6 +10,7 @@ import { PrimeReactProvider } from 'primereact/api';
 // Fallback to system fonts as per brand guidelines
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXTAUTH_URL || 'https://assetworks.netlify.app'),
   title: "AssetWorks - AI-Powered Financial Analysis",
   description: "Generate powerful financial widgets and analyze market trends with AI",
   keywords: "financial analysis, AI, stock market, trading, widgets, dashboard",

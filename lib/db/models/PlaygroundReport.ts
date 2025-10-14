@@ -137,7 +137,6 @@ const PlaygroundReportSchema = new mongoose.Schema<IPlaygroundReport>(
     },
     parentReportId: {
       type: String,
-      index: true,
     },
     htmlContent: {
       type: String,
