@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
+import { prisma } from '@/lib/db/prisma';
 import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({
@@ -20,8 +19,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { reportId } = await params;
     const { currentContent } = await request.json();
 
@@ -32,13 +29,17 @@ export async function POST(
       );
     }
 
-    // Find report and verify ownership
-    const report = await PlaygroundReport.findById(reportId);
-    if (!report) {
+    // Find report and verify ownership via thread
+    const report = await prisma.playground_reports.findUnique({
+      where: { id: reportId },
+      include: { threads: true },
+    });
+
+    if (!report || !report.threads) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
-    if (report.userId !== session.user.id) {
+    if (report.threads.userId !== session.user.id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

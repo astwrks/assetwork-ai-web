@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import Thread from '@/lib/db/models/Thread';
+import { prisma } from '@/lib/db/prisma';
 import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-// POST /api/playground/threads/:threadId/compress-context
+// POST /api/playground/reports/:threadId/compress-context
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ threadId: string }> }
@@ -19,8 +18,6 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    await connectToDatabase();
 
     const { threadId } = await params;
     const { currentContent } = await request.json();
@@ -33,7 +30,10 @@ export async function POST(
     }
 
     // Find thread and verify ownership
-    const thread = await Thread.findById(threadId);
+    const thread = await prisma.threads.findUnique({
+      where: { id: threadId },
+    });
+
     if (!thread) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
@@ -43,23 +43,23 @@ export async function POST(
     }
 
     // Use Claude to compress the content
-    const compressionPrompt = `You are an expert at compressing and summarizing conversation context while preserving all critical information.
+    const compressionPrompt = `You are an expert at compressing and summarizing report content while preserving all critical information.
 
-Your task is to compress the following context while maintaining:
-1. All key decisions, outcomes, and action items
-2. Important technical details and specifications
-3. Context needed to continue the conversation
-4. Chronological flow of the discussion
+Your task is to compress the following report while maintaining:
+1. All key findings, insights, and recommendations
+2. Important data points and metrics
+3. Critical analysis and conclusions
+4. Structural organization and flow
 
 Remove:
-1. Redundant information
-2. Verbose explanations that can be condensed
-3. Repetitive exchanges
-4. Unnecessary pleasantries
+1. Redundant explanations
+2. Verbose sections that can be condensed
+3. Repetitive data
+4. Unnecessary formatting details
 
 Provide the compressed version in the same markdown format as the input.
 
-Here is the context to compress:
+Here is the report to compress:
 
 ${currentContent}
 
@@ -95,7 +95,7 @@ Compressed version:`;
       { status: 200 }
     );
   } catch (error) {
-    console.error('Error compressing context:', error);
+    console.error('Error compressing report context:', error);
     return NextResponse.json(
       { error: 'Failed to compress context' },
       { status: 500 }

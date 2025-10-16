@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import './playground.css';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import AISummaryDashboard from '@/components/dashboard/AISummaryDashboard';
 import {
   MessageSquare,
   FileText,
@@ -169,6 +170,7 @@ export default function FinancialPlaygroundPage() {
     description: string;
   }>>([]);
   const [activeSystemPromptId, setActiveSystemPromptId] = useState<string>('web-report');
+  const [showDashboard, setShowDashboard] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const reportEndRef = useRef<HTMLDivElement>(null);
@@ -189,19 +191,24 @@ export default function FinancialPlaygroundPage() {
     }
   }, [session]);
 
-  // Auto-create first thread if user has none
+  // Check if user should see dashboard (returning user with threads)
   useEffect(() => {
-    // Only run if session exists, threads array is loaded (even if empty), and we don't have a current thread
     if (!session || threads === undefined) return;
 
-    // If user has no threads and no current thread, auto-create one
-    if (threads.length === 0 && !currentThread && !justCreatedThreadRef.current) {
+    const threadIdFromUrl = searchParams.get('thread');
+
+    // If user has threads and no specific thread in URL, show dashboard
+    if (threads.length > 0 && !threadIdFromUrl && !currentThread) {
+      console.log('Returning user detected - showing dashboard');
+      setShowDashboard(true);
+    } else if (threads.length === 0 && !currentThread && !justCreatedThreadRef.current) {
+      // New user with no threads - auto-create first thread
       console.log('No threads found - auto-creating first thread');
       createNewThread();
     }
-  }, [threads, session, currentThread]);
+  }, [threads, session, currentThread, searchParams]);
 
-  // Handle URL thread parameter and restore last thread
+  // Handle URL thread parameter
   useEffect(() => {
     if (threads.length === 0 || !session) return;
 
@@ -218,23 +225,12 @@ export default function FinancialPlaygroundPage() {
     }
 
     if (threadIdFromUrl) {
-      // Load thread from URL
+      // Load thread from URL and hide dashboard
       const thread = threads.find(t => t._id === threadIdFromUrl);
       if (thread) {
+        setShowDashboard(false);
         lastLoadedThreadRef.current = threadIdFromUrl;
         loadThread(threadIdFromUrl);
-      }
-    } else {
-      // No URL parameter - load last opened thread from localStorage
-      const lastThreadId = localStorage.getItem(`playground_last_thread_${session.user?.email}`);
-      if (lastThreadId && lastLoadedThreadRef.current !== lastThreadId) {
-        const thread = threads.find(t => t._id === lastThreadId);
-        if (thread) {
-          lastLoadedThreadRef.current = lastThreadId;
-          loadThread(lastThreadId);
-          // Update URL without reload
-          router.replace(`/financial-playground?thread=${lastThreadId}`, { scroll: false });
-        }
       }
     }
   }, [threads, searchParams, session]);
@@ -380,6 +376,7 @@ export default function FinancialPlaygroundPage() {
         setEditingContext(null);
         setSectionPreviewContent({});
         setSectionStreamingState({});
+        setShowDashboard(false); // Hide dashboard when creating new thread
 
         // Set new thread as current
         setCurrentThread(data.thread);
@@ -1012,6 +1009,11 @@ export default function FinancialPlaygroundPage() {
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     );
+  }
+
+  // Show AI Summary Dashboard for returning users
+  if (showDashboard) {
+    return <AISummaryDashboard />;
   }
 
   return (

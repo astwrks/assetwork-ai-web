@@ -19,6 +19,8 @@ import {
   Sliders,
   Check,
   X,
+  Zap,
+  DollarSign,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -201,6 +203,29 @@ export default function PlaygroundSettingsPage() {
     updateSettings({ providers: updatedProviders });
   };
 
+  // Estimate token count (rough approximation: ~4 characters per token)
+  const estimateTokens = (text: string): number => {
+    return Math.ceil(text.length / 4);
+  };
+
+  // Calculate cost per 1M tokens (using Claude Sonnet pricing as baseline)
+  const calculatePromptCost = (tokens: number): { input: number; total: number } => {
+    // Claude Sonnet pricing: $3 per 1M input tokens, $15 per 1M output tokens
+    // For system prompts, we only count input cost
+    const inputCostPer1M = 3.0;
+    const inputCost = (tokens / 1_000_000) * inputCostPer1M;
+
+    // Estimate typical output (10x the prompt size) for total conversation cost
+    const estimatedOutputTokens = tokens * 10;
+    const outputCostPer1M = 15.0;
+    const outputCost = (estimatedOutputTokens / 1_000_000) * outputCostPer1M;
+
+    return {
+      input: inputCost,
+      total: inputCost + outputCost
+    };
+  };
+
   // Switch system prompt
   const switchSystemPrompt = async (promptId: string) => {
     try {
@@ -344,6 +369,46 @@ export default function PlaygroundSettingsPage() {
               </div>
 
               <div className="space-y-4">
+                {/* System Prompts Overview */}
+                {systemPrompts.length > 0 && (
+                  <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg border border-border">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">{systemPrompts.length}</p>
+                        <p className="text-xs text-muted-foreground">Available Prompts</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-yellow-100 dark:bg-yellow-900/20 flex items-center justify-center">
+                        <Zap className="w-5 h-5 text-yellow-600" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">
+                          {systemPrompts.reduce((sum, p) => sum + estimateTokens(p.content || settings.systemPrompt), 0).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Total Tokens</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
+                        <DollarSign className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-2xl font-bold text-foreground">
+                          ${systemPrompts.reduce((sum, p) => {
+                            const tokens = estimateTokens(p.content || settings.systemPrompt);
+                            return sum + calculatePromptCost(tokens).input;
+                          }, 0).toFixed(4)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Avg Cost / Request</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* System Prompt Selector */}
                 {systemPrompts.length > 0 && (
                   <div className="space-y-2">
@@ -353,6 +418,11 @@ export default function PlaygroundSettingsPage() {
                     <div className="grid grid-cols-1 gap-3">
                       {systemPrompts.map((prompt) => {
                         const isActive = activeSystemPromptId === prompt.id;
+                        // Calculate tokens and cost for this prompt
+                        const promptContent = prompt.content || settings.systemPrompt;
+                        const tokens = estimateTokens(promptContent);
+                        const cost = calculatePromptCost(tokens);
+
                         return (
                           <button
                             key={prompt.id}
@@ -374,7 +444,25 @@ export default function PlaygroundSettingsPage() {
                                 )}
                               </div>
                             </div>
-                            <p className="text-sm text-muted-foreground">{prompt.description}</p>
+                            <p className="text-sm text-muted-foreground mb-3">{prompt.description}</p>
+
+                            {/* Token and Cost Information */}
+                            <div className="flex items-center gap-4 pt-2 border-t border-border/50">
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <Zap className="w-3.5 h-3.5 text-yellow-600" />
+                                <span className="font-medium text-foreground">{tokens.toLocaleString()}</span>
+                                <span className="text-muted-foreground">tokens</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <DollarSign className="w-3.5 h-3.5 text-green-600" />
+                                <span className="font-medium text-foreground">${cost.input.toFixed(6)}</span>
+                                <span className="text-muted-foreground">/ request</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-xs ml-auto">
+                                <span className="text-muted-foreground">Est. conversation:</span>
+                                <span className="font-medium text-foreground">${cost.total.toFixed(4)}</span>
+                              </div>
+                            </div>
                           </button>
                         );
                       })}
@@ -383,9 +471,27 @@ export default function PlaygroundSettingsPage() {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    System Prompt Content
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-foreground">
+                      System Prompt Content
+                    </label>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <Zap className="w-3.5 h-3.5 text-yellow-600" />
+                        <span className="font-medium text-foreground">
+                          {estimateTokens(settings.systemPrompt).toLocaleString()}
+                        </span>
+                        <span className="text-muted-foreground">tokens</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <DollarSign className="w-3.5 h-3.5 text-green-600" />
+                        <span className="font-medium text-foreground">
+                          ${calculatePromptCost(estimateTokens(settings.systemPrompt)).input.toFixed(6)}
+                        </span>
+                        <span className="text-muted-foreground">/ request</span>
+                      </div>
+                    </div>
+                  </div>
                   <textarea
                     value={settings.systemPrompt}
                     onChange={(e) =>
@@ -394,9 +500,14 @@ export default function PlaygroundSettingsPage() {
                     className="w-full h-96 p-4 border border-border rounded-lg font-mono text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
                     placeholder="Enter your system prompt..."
                   />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {settings.systemPrompt.length} characters
-                  </p>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-xs text-muted-foreground">
+                      {settings.systemPrompt.length} characters
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Est. full conversation cost: ${calculatePromptCost(estimateTokens(settings.systemPrompt)).total.toFixed(4)}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
