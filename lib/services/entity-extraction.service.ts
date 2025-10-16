@@ -148,6 +148,7 @@ Return ONLY the JSON array, no other text.`;
           type: extracted.type,
           ticker: extracted.ticker,
           mentionCount: 0,
+          updatedAt: new Date(),
         },
       });
       console.log(`Created new entity: ${extracted.name}`);

@@ -452,10 +452,13 @@ export async function POST(
       try {
         // Generate AI response
         let generator;
-        const messages = previousMessages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
+        // Normalize roles to lowercase and filter out system messages (Claude doesn't accept them in messages array)
+        const messages = previousMessages
+          .filter((m) => m.role.toUpperCase() !== 'SYSTEM') // Remove system messages
+          .map((m) => ({
+            role: m.role.toLowerCase() as 'user' | 'assistant',
+            content: m.content,
+          }));
 
         if (provider === 'anthropic' || model.startsWith('claude')) {
           generator = claudeService.streamResponse({
