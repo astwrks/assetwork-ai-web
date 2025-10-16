@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
-import ReportSection from '@/lib/db/models/ReportSection';
+import { prisma } from '@/lib/db/prisma';
 
 // GET /api/playground/reports/:reportId/context-markdown
 export async function GET(
@@ -16,18 +14,24 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { reportId } = await params;
 
-    // Find report and verify ownership
-    const report = await PlaygroundReport.findById(reportId);
+    // Find report and verify ownership via thread
+    const report = await prisma.playground_reports.findUnique({
+      where: { id: reportId },
+      include: { threads: true },
+    });
+
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
-    const reportUserId = report.userId?.toString();
-    const sessionUserId = session.user.id?.toString();
+    if (!report.threads) {
+      return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+    }
+
+    const reportUserId = report.threads.userId;
+    const sessionUserId = session.user.id;
     const isOwner = reportUserId === sessionUserId;
 
     if (!isOwner) {
@@ -35,24 +39,33 @@ export async function GET(
         reportId,
         reportUserId,
         sessionUserId,
-        isOwner
+        isOwner,
       });
-      return NextResponse.json({
-        error: 'Access denied. You do not have permission to view this report context.',
-        debug: process.env.NODE_ENV === 'development' ? {
-          reportUserId,
-          sessionUserId,
-          isOwner
-        } : undefined
-      }, { status: 403 });
+      return NextResponse.json(
+        {
+          error:
+            'Access denied. You do not have permission to view this report context.',
+          debug:
+            process.env.NODE_ENV === 'development'
+              ? {
+                  reportUserId,
+                  sessionUserId,
+                  isOwner,
+                }
+              : undefined,
+        },
+        { status: 403 }
+      );
     }
 
     console.log('✅ Report context access granted:', { reportId, isOwner });
 
     // Fetch sections
-    const sections = await ReportSection.find({ reportId })
-      .sort({ order: 1 })
-      .limit(100);
+    const sections = await prisma.report_sections.findMany({
+      where: { reportId },
+      orderBy: { order: 'asc' },
+      take: 100,
+    });
 
     // Generate markdown content
     let markdown = `# ${report.title || 'Financial Report'}\n\n`;
@@ -60,8 +73,9 @@ export async function GET(
     markdown += `**Created**: ${new Date(report.createdAt).toLocaleString()}\n`;
     markdown += `**Mode**: ${report.isInteractiveMode ? 'Interactive' : 'Static'}\n`;
 
-    if (report.metadata?.model) {
-      markdown += `**Model**: ${report.metadata.model}\n`;
+    const reportMetadata = report.metadata as any;
+    if (reportMetadata?.model) {
+      markdown += `**Model**: ${reportMetadata.model}\n`;
     }
 
     markdown += `\n---\n\n`;
@@ -98,19 +112,19 @@ export async function GET(
     }
 
     // Add metadata
-    if (report.metadata) {
+    if (reportMetadata) {
       markdown += `## Metadata\n\n`;
 
-      if (report.metadata.prompt) {
-        markdown += `**Original Prompt**: ${report.metadata.prompt}\n\n`;
+      if (reportMetadata.prompt) {
+        markdown += `**Original Prompt**: ${reportMetadata.prompt}\n\n`;
       }
 
-      if (report.metadata.tokens) {
-        markdown += `**Tokens Used**: ${report.metadata.tokens}\n\n`;
+      if (reportMetadata.tokens) {
+        markdown += `**Tokens Used**: ${reportMetadata.tokens}\n\n`;
       }
 
-      if (report.metadata.cost) {
-        markdown += `**Cost**: $${report.metadata.cost.toFixed(4)}\n\n`;
+      if (reportMetadata.cost) {
+        markdown += `**Cost**: $${reportMetadata.cost.toFixed(4)}\n\n`;
       }
     }
 
@@ -120,8 +134,8 @@ export async function GET(
         stats: {
           sectionCount: sections.length,
           totalTokens:
-            typeof report.metadata?.tokens === 'number'
-              ? report.metadata.tokens
+            typeof reportMetadata?.tokens === 'number'
+              ? reportMetadata.tokens
               : 0,
         },
       },

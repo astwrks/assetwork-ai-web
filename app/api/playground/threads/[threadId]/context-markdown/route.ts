@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import Thread from '@/lib/db/models/Thread';
-import Message from '@/lib/db/models/Message';
-import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
+import { prisma } from '@/lib/db/prisma';
 
 // GET /api/playground/threads/:threadId/context-markdown
 export async function GET(
@@ -17,23 +14,25 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { threadId } = await params;
 
     // Find thread and verify ownership or sharing
-    const thread = await Thread.findById(threadId);
+    const thread = await prisma.threads.findUnique({
+      where: { id: threadId },
+    });
+
     if (!thread) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
     // Check access permissions
-    const threadUserId = thread.userId?.toString();
-    const sessionUserId = session.user.id?.toString();
+    const threadUserId = thread.userId;
+    const sessionUserId = session.user.id;
 
     const isOwner = threadUserId === sessionUserId;
-    const hasSharedAccess = thread.sharedWith?.some(
-      (share: any) => share.userId?.toString() === sessionUserId
+    const sharedWith = (thread.sharedWith as any[]) || [];
+    const hasSharedAccess = sharedWith.some(
+      (share: any) => share.userId === sessionUserId
     );
 
     if (!isOwner && !hasSharedAccess) {
@@ -42,30 +41,45 @@ export async function GET(
         threadUserId,
         sessionUserId,
         hasSharedWith: !!thread.sharedWith,
-        sharedWithLength: thread.sharedWith?.length || 0
+        sharedWithLength: sharedWith.length,
       });
-      return NextResponse.json({
-        error: 'Access denied. You do not have permission to view this thread context.',
-        debug: process.env.NODE_ENV === 'development' ? {
-          threadUserId,
-          sessionUserId,
-          isOwner,
-          hasSharedAccess
-        } : undefined
-      }, { status: 403 });
+      return NextResponse.json(
+        {
+          error:
+            'Access denied. You do not have permission to view this thread context.',
+          debug:
+            process.env.NODE_ENV === 'development'
+              ? {
+                  threadUserId,
+                  sessionUserId,
+                  isOwner,
+                  hasSharedAccess,
+                }
+              : undefined,
+        },
+        { status: 403 }
+      );
     }
 
-    console.log('✅ Context access granted:', { threadId, isOwner, hasSharedAccess });
+    console.log('✅ Context access granted:', {
+      threadId,
+      isOwner,
+      hasSharedAccess,
+    });
 
     // Fetch messages
-    const messages = await Message.find({ threadId })
-      .sort({ createdAt: 1 })
-      .limit(500);
+    const messages = await prisma.messages.findMany({
+      where: { threadId },
+      orderBy: { createdAt: 'asc' },
+      take: 500,
+    });
 
     // Fetch reports
-    const reports = await PlaygroundReport.find({ threadId })
-      .sort({ createdAt: -1 })
-      .limit(50);
+    const reports = await prisma.playground_reports.findMany({
+      where: { threadId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
 
     // Generate markdown content
     let markdown = `# Thread: ${thread.title}\n\n`;
@@ -88,8 +102,9 @@ export async function GET(
       markdown += `### ${role} (${new Date(msg.createdAt).toLocaleString()})\n\n`;
       markdown += `${msg.content}\n\n`;
 
-      if (msg.metadata?.tokens) {
-        markdown += `*Tokens: ${msg.metadata.tokens}*\n\n`;
+      const msgMetadata = msg.metadata as any;
+      if (msgMetadata?.tokens) {
+        markdown += `*Tokens: ${msgMetadata.tokens}*\n\n`;
       }
 
       markdown += `---\n\n`;
@@ -121,10 +136,13 @@ export async function GET(
         stats: {
           messageCount: messages.length,
           reportCount: reports.length,
-          totalTokens: messages.reduce(
-            (sum, m) => sum + (typeof m.metadata?.tokens === 'number' ? m.metadata.tokens : 0),
-            0
-          ),
+          totalTokens: messages.reduce((sum, m) => {
+            const msgMetadata = m.metadata as any;
+            return (
+              sum +
+              (typeof msgMetadata?.tokens === 'number' ? msgMetadata.tokens : 0)
+            );
+          }, 0),
         },
       },
       { status: 200 }
