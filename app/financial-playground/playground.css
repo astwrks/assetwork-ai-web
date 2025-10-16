@@ -312,12 +312,27 @@
   }
 }
 
+@keyframes pulse-subtle {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 6px rgba(0, 82, 204, 0.3);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 6px 12px rgba(0, 82, 204, 0.4);
+  }
+}
+
 .streaming-indicator {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 .animate-shimmer-pulse {
   animation: shimmer-pulse 2s ease-in-out infinite;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
 }
 
 /* Chart Containers */

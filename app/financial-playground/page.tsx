@@ -275,6 +275,16 @@ export default function FinancialPlaygroundPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
+  // Track editingContext state changes for debugging
+  useEffect(() => {
+    console.log('🔄 editingContext changed:', {
+      hasContext: !!editingContext,
+      type: editingContext?.type,
+      sectionId: editingContext?.sectionId,
+      timestamp: new Date().toISOString()
+    });
+  }, [editingContext]);
+
   // Load playground settings and system prompts
   useEffect(() => {
     if (session) {
@@ -753,8 +763,14 @@ export default function FinancialPlaygroundPage() {
 
   // Section operation handlers
   const handleEditSection = (sectionId: string) => {
+    console.log('🔧 handleEditSection called:', { sectionId });
     const section = sections.find(s => s._id === sectionId);
     if (section) {
+      console.log('✅ Setting editingContext:', {
+        type: 'edit',
+        sectionId,
+        sectionTitle: section.title
+      });
       setEditingContext({
         type: 'edit',
         sectionId,
@@ -768,6 +784,8 @@ export default function FinancialPlaygroundPage() {
           chatInput.focus();
         }
       }, 100);
+    } else {
+      console.error('❌ Section not found:', sectionId);
     }
   };
 
@@ -1559,10 +1577,16 @@ export default function FinancialPlaygroundPage() {
                             isStreaming={sectionStreamingState[section._id] || false}
                             previewContent={sectionPreviewContent[section._id]}
                             onSelect={() => {
+                              console.log('📍 Section selected (not editing yet):', section._id);
                               setSelectedSectionId(section._id);
-                              handleEditSection(section._id);
                             }}
                             onEdit={handleEditSection}
+                            onCancelEdit={() => {
+                              console.log('❌ Cancelled editing');
+                              setEditingContext(null);
+                              setSelectedSectionId(null);
+                              toast.info('Editing cancelled');
+                            }}
                             onDelete={handleDeleteSection}
                             onDuplicate={handleDuplicateSection}
                             onMoveUp={(id) => handleMoveSection(id, 'up')}
@@ -1644,13 +1668,14 @@ export default function FinancialPlaygroundPage() {
                       {editingContext ? (
                         <Button
                           onClick={() => {
+                            console.log('✅ Done Editing button clicked');
                             setEditingContext(null);
                             setSelectedSectionId(null);
                             toast.success('Exited editing mode');
                           }}
-                          variant="outline"
+                          variant="default"
                           size="sm"
-                          className="gap-2"
+                          className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-lg animate-pulse-subtle"
                         >
                           <X className="w-4 h-4" />
                           Done Editing

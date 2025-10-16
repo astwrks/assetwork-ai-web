@@ -4,6 +4,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/db/prisma';
 import { comparePassword } from './password';
+import { checkRateLimit, recordFailedAttempt, resetRateLimit } from './rate-limiter';
 
 // Validate environment variables in production
 if (process.env.NODE_ENV === 'production') {
@@ -41,6 +42,19 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Invalid credentials');
         }
 
+        // Check rate limit for this email
+        const rateLimitCheck = checkRateLimit(credentials.email);
+        if (!rateLimitCheck.isAllowed) {
+          if (rateLimitCheck.lockedUntil) {
+            throw new Error(
+              `Account temporarily locked due to too many failed attempts. Try again after ${rateLimitCheck.lockedUntil.toLocaleTimeString()}`
+            );
+          }
+          throw new Error(
+            `Too many login attempts. Please try again later. Remaining attempts: ${rateLimitCheck.remainingAttempts}`
+          );
+        }
+
         // Find user in PostgreSQL using Prisma
         const user = await prisma.users.findUnique({
           where: { email: credentials.email },
@@ -54,6 +68,8 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user || !user.password) {
+          // Record failed attempt for rate limiting
+          recordFailedAttempt(credentials.email);
           throw new Error('User not found');
         }
 
@@ -64,8 +80,13 @@ export const authOptions: NextAuthOptions = {
         );
 
         if (!isPasswordValid) {
+          // Record failed attempt for rate limiting
+          recordFailedAttempt(credentials.email);
           throw new Error('Invalid password');
         }
+
+        // Reset rate limit on successful login
+        resetRateLimit(credentials.email);
 
         // Return user object
         return {
@@ -86,8 +107,38 @@ export const authOptions: NextAuthOptions = {
     secret: process.env.NEXTAUTH_SECRET,
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  // Let NextAuth handle cookie configuration automatically
+  // Explicit secure cookie configuration following OWASP best practices
   useSecureCookies: process.env.NODE_ENV === 'production',
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.session-token' : 'next-auth.session-token',
+      options: {
+        httpOnly: true, // Prevent XSS attacks by making cookie inaccessible to JavaScript
+        sameSite: 'lax', // CSRF protection: cookies only sent with same-site requests or top-level navigation
+        path: '/',
+        secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+        domain: process.env.NODE_ENV === 'production' ? process.env.NEXTAUTH_DOMAIN : undefined,
+      },
+    },
+    callbackUrl: {
+      name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.callback-url' : 'next-auth.callback-url',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+    csrfToken: {
+      name: process.env.NODE_ENV === 'production' ? '__Host-next-auth.csrf-token' : 'next-auth.csrf-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+  },
   pages: {
     signIn: '/auth/signin',
     error: '/auth/error',
