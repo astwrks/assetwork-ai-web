@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
 import { prisma } from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
 import { claudeService } from '@/lib/ai/claude.service';
@@ -12,8 +13,8 @@ export async function GET(
   { params }: { params: Promise<{ reportId: string; sectionId: string }> }
 ) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -46,8 +47,8 @@ export async function PATCH(
   { params }: { params: Promise<{ reportId: string; sectionId: string }> }
 ) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -131,8 +132,8 @@ export async function PATCH(
           version: 1,
           editHistory: [],
           metadata: {
-            originallyGeneratedBy: session.user.email,
-            lastModifiedBy: session.user.email,
+            originallyGeneratedBy: session.user.id,
+            lastModifiedBy: session.user.id,
             model: (section.metadata as any)?.model,
             originalPrompt: `Duplicate of: ${section.title}`,
           },
@@ -172,7 +173,7 @@ export async function PATCH(
       // Load settings
       let settings = await prisma.playground_settings.findFirst({
         where: {
-          userId: session.user.email,
+          userId: session.user.id,
         },
       });
 
@@ -239,14 +240,14 @@ Return only the HTML content, no explanations.`;
                 {
                   version: section.version + 1,
                   htmlContent: accumulatedContent,
-                  editedBy: session.user.email,
+                  editedBy: session.user.id,
                   editedAt: new Date(),
                   editPrompt: prompt,
                 },
               ],
               metadata: {
                 ...(section.metadata as any),
-                lastModifiedBy: session.user.email,
+                lastModifiedBy: session.user.id,
               },
               updatedAt: new Date(),
             },
@@ -297,7 +298,7 @@ Return only the HTML content, no explanations.`;
       updatedAt: new Date(),
       metadata: {
         ...(section.metadata as any),
-        lastModifiedBy: session.user.email,
+        lastModifiedBy: session.user.id,
       },
     };
 
@@ -310,7 +311,7 @@ Return only the HTML content, no explanations.`;
         {
           version: section.version + 1,
           htmlContent,
-          editedBy: session.user.email,
+          editedBy: session.user.id,
           editedAt: new Date(),
         },
       ];
@@ -353,8 +354,8 @@ export async function DELETE(
   { params }: { params: Promise<{ reportId: string; sectionId: string }> }
 ) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

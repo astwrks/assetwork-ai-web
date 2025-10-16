@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
 import { prisma } from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
 
 // GET /api/playground/settings - Get settings for current user
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Try to find user-specific settings first
     let settings = await prisma.playground_settings.findFirst({
       where: {
-        userId: session.user.email,
+        userId: session.user.id,
       },
     });
 
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
       settings = await prisma.playground_settings.create({
         data: {
           id: randomUUID(),
-          userId: session.user.email,
+          userId: session.user.id,
           settings: {},
           updatedAt: new Date(),
         },
@@ -43,8 +44,8 @@ export async function GET(request: NextRequest) {
 // POST /api/playground/settings - Create new settings
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
     // Check if settings already exist
     const existingSettings = await prisma.playground_settings.findFirst({
       where: {
-        userId: session.user.email,
+        userId: session.user.id,
       },
     });
 
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
     const settings = await prisma.playground_settings.create({
       data: {
         id: randomUUID(),
-        userId: session.user.email,
+        userId: session.user.id,
         defaultModel: body.defaultModel || null,
         defaultProvider: body.defaultProvider || null,
         autoSave: body.autoSave !== undefined ? body.autoSave : true,
@@ -89,8 +90,8 @@ export async function POST(request: NextRequest) {
 // PATCH /api/playground/settings - Update settings
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -99,7 +100,7 @@ export async function PATCH(request: NextRequest) {
     // Find user's settings
     let settings = await prisma.playground_settings.findFirst({
       where: {
-        userId: session.user.email,
+        userId: session.user.id,
       },
     });
 
@@ -108,7 +109,7 @@ export async function PATCH(request: NextRequest) {
       settings = await prisma.playground_settings.create({
         data: {
           id: randomUUID(),
-          userId: session.user.email,
+          userId: session.user.id,
           defaultModel: body.defaultModel || null,
           defaultProvider: body.defaultProvider || null,
           autoSave: body.autoSave !== undefined ? body.autoSave : true,

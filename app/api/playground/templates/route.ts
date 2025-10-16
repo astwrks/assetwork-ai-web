@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
 import { prisma } from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
 
 // GET /api/playground/templates - Get all public templates
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
     const where: any = {
       OR: [
         { isPublic: true }, // Public templates
-        { userId: session.user.email }, // User's own templates
+        { userId: session.user.id }, // User's own templates
       ],
     };
 
@@ -65,8 +66,8 @@ export async function GET(request: NextRequest) {
 // POST /api/playground/templates - Create a new template
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     const template = await prisma.templates.create({
       data: {
         id: randomUUID(),
-        userId: session.user.email,
+        userId: session.user.id,
         name: name.trim(),
         description: description?.trim() || null,
         category: category?.trim() || null,

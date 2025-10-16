@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
 import { prisma } from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
 
@@ -10,8 +11,8 @@ export async function POST(
 ) {
   try {
     const { templateId } = await params;
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -29,7 +30,7 @@ export async function POST(
 
     // Check if user has access
     const hasAccess =
-      template.isPublic || template.userId === session.user.email;
+      template.isPublic || template.userId === session.user.id;
 
     if (!hasAccess) {
       return NextResponse.json(
@@ -59,7 +60,7 @@ export async function POST(
     const thread = await prisma.threads.create({
       data: {
         id: randomUUID(),
-        userId: session.user.email,
+        userId: session.user.id,
         title: customTitle || `${template.name} - ${new Date().toLocaleDateString()}`,
         description: template.description || 'Report created from template',
         status: 'ACTIVE',

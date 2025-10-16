@@ -355,7 +355,7 @@ export async function POST(
 
     // Load user's playground settings
     let settings = await prisma.playground_settings.findFirst({
-      where: { userId: session.user.email },
+      where: { userId: session.user.id },
     });
 
     // If no settings, create default
@@ -363,7 +363,7 @@ export async function POST(
       settings = await prisma.playground_settings.create({
         data: {
           id: randomUUID(),
-          userId: session.user.email,
+          userId: session.user.id,
           defaultModel: null,
           defaultProvider: null,
           autoSave: true,

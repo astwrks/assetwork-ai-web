@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
 import { prisma } from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
 import { claudeService } from '@/lib/ai/claude.service';
@@ -13,8 +14,8 @@ export async function GET(
   { params }: { params: Promise<{ reportId: string }> }
 ) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -51,8 +52,8 @@ export async function POST(
   { params }: { params: Promise<{ reportId: string }> }
 ) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -85,7 +86,7 @@ export async function POST(
     // Load user settings for system prompt and model config
     let settings = await prisma.playground_settings.findFirst({
       where: {
-        userId: session.user.email,
+        userId: session.user.id,
       },
     });
 
@@ -377,8 +378,8 @@ Generate a professional, visually stunning section now:`;
             version: 1,
             editHistory: [],
             metadata: {
-              originallyGeneratedBy: session.user.email,
-              lastModifiedBy: session.user.email,
+              originallyGeneratedBy: session.user.id,
+              lastModifiedBy: session.user.id,
               model,
               originalPrompt: prompt,
             },
