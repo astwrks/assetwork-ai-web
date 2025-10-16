@@ -123,6 +123,7 @@ export default function FinancialPlaygroundPage() {
   const [currentReport, setCurrentReport] = useState<Report | null>(null);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true); // Track initial page load
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     // Restore sidebar state from localStorage
     if (typeof window !== 'undefined') {
@@ -176,6 +177,7 @@ export default function FinancialPlaygroundPage() {
   const reportEndRef = useRef<HTMLDivElement>(null);
   const justCreatedThreadRef = useRef<string | null>(null);
   const lastLoadedThreadRef = useRef<string | null>(null); // Track last loaded thread to prevent infinite loop
+  const isCreatingThreadRef = useRef<boolean>(false); // Prevent simultaneous thread creation
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -184,9 +186,18 @@ export default function FinancialPlaygroundPage() {
     }
   }, [status, router]);
 
-  // Load threads on mount and handle URL parameters
+  // Load threads on mount and clean up localStorage
   useEffect(() => {
     if (session) {
+      // Clean up any invalid localStorage values
+      if (session.user?.email) {
+        const lastThread = localStorage.getItem(`playground_last_thread_${session.user.email}`);
+        if (lastThread === 'undefined' || lastThread === 'null' || !lastThread) {
+          console.log('Cleaning up invalid localStorage thread value');
+          localStorage.removeItem(`playground_last_thread_${session.user.email}`);
+        }
+      }
+
       loadThreads();
     }
   }, [session]);
@@ -196,14 +207,34 @@ export default function FinancialPlaygroundPage() {
     if (!session || threads === undefined) return;
 
     const threadIdFromUrl = searchParams.get('thread');
+    const hasValidThreadParam = threadIdFromUrl && threadIdFromUrl !== 'undefined' && threadIdFromUrl !== 'null';
 
-    // If user has threads and no specific thread in URL, show dashboard
-    if (threads.length > 0 && !threadIdFromUrl && !currentThread) {
-      console.log('Returning user detected - showing dashboard');
+    console.log('🔍 Dashboard check:', {
+      threadsCount: threads.length,
+      threadIdFromUrl,
+      hasValidThreadParam,
+      hasCurrentThread: !!currentThread,
+      justCreatedThreadRef: justCreatedThreadRef.current,
+      isCreating: isCreatingThreadRef.current
+    });
+
+    // If user has threads and no valid thread in URL, show dashboard
+    if (threads.length > 0 && !hasValidThreadParam && !currentThread) {
+      console.log('✅ Returning user detected - showing dashboard');
       setShowDashboard(true);
-    } else if (threads.length === 0 && !currentThread && !justCreatedThreadRef.current) {
-      // New user with no threads - auto-create first thread
-      console.log('No threads found - auto-creating first thread');
+      // Clear any invalid thread params from URL
+      if (threadIdFromUrl) {
+        console.log('🧹 Cleaning invalid thread param from URL');
+        router.replace('/financial-playground', { scroll: false });
+      }
+    } else if (
+      threads.length === 0 &&
+      !currentThread &&
+      !justCreatedThreadRef.current &&
+      !isCreatingThreadRef.current
+    ) {
+      // New user with no threads - auto-create first thread (only if not already creating)
+      console.log('🆕 No threads found - auto-creating first thread');
       createNewThread();
     }
   }, [threads, session, currentThread, searchParams]);
@@ -214,23 +245,31 @@ export default function FinancialPlaygroundPage() {
 
     const threadIdFromUrl = searchParams.get('thread');
 
+    // Check if thread param is valid
+    const hasValidThreadParam = threadIdFromUrl && threadIdFromUrl !== 'undefined' && threadIdFromUrl !== 'null';
+
     // Skip if we just created this thread - check ref first before any state
-    if (threadIdFromUrl && justCreatedThreadRef.current === threadIdFromUrl) {
+    if (hasValidThreadParam && justCreatedThreadRef.current === threadIdFromUrl) {
       return; // Don't clear the ref yet - keep it to prevent subsequent calls
     }
 
     // Skip if this thread is already loaded (compare with ref to avoid triggering re-renders)
-    if (threadIdFromUrl && lastLoadedThreadRef.current === threadIdFromUrl) {
+    if (hasValidThreadParam && lastLoadedThreadRef.current === threadIdFromUrl) {
       return;
     }
 
-    if (threadIdFromUrl) {
+    if (hasValidThreadParam) {
       // Load thread from URL and hide dashboard
       const thread = threads.find(t => t._id === threadIdFromUrl);
       if (thread) {
         setShowDashboard(false);
         lastLoadedThreadRef.current = threadIdFromUrl;
         loadThread(threadIdFromUrl);
+      } else {
+        // Invalid thread ID - show dashboard
+        console.log('Invalid thread ID in URL - showing dashboard');
+        setShowDashboard(true);
+        router.replace('/financial-playground', { scroll: false });
       }
     }
   }, [threads, searchParams, session]);
@@ -331,7 +370,12 @@ export default function FinancialPlaygroundPage() {
       const response = await fetch('/api/playground/threads');
       if (response.ok) {
         const data = await response.json();
-        setThreads(data.threads);
+        // Normalize thread IDs (support both Prisma 'id' and MongoDB '_id')
+        const normalizedThreads = data.threads.map((thread: any) => ({
+          ...thread,
+          _id: thread.id || thread._id
+        }));
+        setThreads(normalizedThreads);
       } else if (response.status === 401) {
         // Not authenticated, redirect will happen via useEffect
         console.log('Not authenticated, threads not loaded');
@@ -346,12 +390,24 @@ export default function FinancialPlaygroundPage() {
       if (error instanceof Error && !error.message.includes('401')) {
         toast.error('Failed to load conversations');
       }
+    } finally {
+      // Mark initialization as complete after loading threads
+      setIsInitializing(false);
     }
   };
 
   // Create new thread
   const createNewThread = async () => {
+    // Prevent simultaneous thread creation
+    if (isCreatingThreadRef.current) {
+      console.log('🚫 Thread creation already in progress, skipping...');
+      return;
+    }
+
     try {
+      isCreatingThreadRef.current = true;
+      console.log('✅ Starting thread creation...');
+
       const response = await fetch('/api/playground/threads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -361,43 +417,92 @@ export default function FinancialPlaygroundPage() {
         }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-
-        // Mark that we just created this thread to prevent useEffect from reloading it
-        justCreatedThreadRef.current = data.thread._id;
-
-        // Clear all existing state
-        setMessages([]);
-        setCurrentReport(null);
-        setStreamingContent('');
-        setSections([]);
-        setSelectedSectionId(null);
-        setEditingContext(null);
-        setSectionPreviewContent({});
-        setSectionStreamingState({});
-        setShowDashboard(false); // Hide dashboard when creating new thread
-
-        // Set new thread as current
-        setCurrentThread(data.thread);
-        setThreads([data.thread, ...threads]);
-
-        // Save as last opened thread and update URL
-        if (session?.user?.email) {
-          localStorage.setItem(`playground_last_thread_${session.user.email}`, data.thread._id);
-        }
-        router.replace(`/financial-playground?thread=${data.thread._id}`, { scroll: false });
-
-        toast.success('New conversation started');
+      // Handle non-OK responses
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Thread creation failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        toast.error(`Failed to create conversation: ${response.statusText}`);
+        return;
       }
+
+      const data = await response.json();
+      console.log('Thread creation response:', data);
+
+      // Validate response structure
+      if (!data.thread) {
+        console.error('Invalid thread response - missing thread object:', data);
+        toast.error('Failed to create conversation - invalid server response');
+        return;
+      }
+
+      // Validate we got a valid thread ID (support both Prisma 'id' and MongoDB '_id')
+      const threadId = data.thread.id || data.thread._id;
+      if (!threadId || threadId === 'undefined' || threadId === 'null') {
+        console.error('Invalid thread ID in response:', {
+          threadId,
+          hasId: !!data.thread.id,
+          has_id: !!data.thread._id,
+          thread: data.thread
+        });
+        toast.error('Failed to create conversation - invalid thread ID');
+        return;
+      }
+
+      // Normalize the thread object to use _id for consistency with the interface
+      const normalizedThread = { ...data.thread, _id: threadId };
+
+      // Mark that we just created this thread to prevent useEffect from reloading it
+      justCreatedThreadRef.current = threadId;
+
+      // Clear all existing state
+      setMessages([]);
+      setCurrentReport(null);
+      setStreamingContent('');
+      setSections([]);
+      setSelectedSectionId(null);
+      setEditingContext(null);
+      setSectionPreviewContent({});
+      setSectionStreamingState({});
+      setShowDashboard(false); // Hide dashboard when creating new thread
+
+      // Set new thread as current
+      setCurrentThread(normalizedThread);
+      setThreads([normalizedThread, ...threads]);
+
+      // Save as last opened thread and update URL
+      if (session?.user?.email) {
+        localStorage.setItem(`playground_last_thread_${session.user.email}`, threadId);
+      }
+      router.replace(`/financial-playground?thread=${threadId}`, { scroll: false });
+
+      console.log('✅ Thread created successfully:', threadId);
+      toast.success('New conversation started');
     } catch (error) {
       console.error('Error creating thread:', error);
-      toast.error('Failed to create conversation');
+      toast.error(error instanceof Error ? error.message : 'Failed to create conversation');
+    } finally {
+      // Reset the flag after a short delay to allow state updates to propagate
+      setTimeout(() => {
+        isCreatingThreadRef.current = false;
+        console.log('✅ Thread creation lock released');
+      }, 1000);
     }
   };
 
   // Load specific thread
   const loadThread = async (threadId: string) => {
+    // Validate thread ID
+    if (!threadId || threadId === 'undefined' || threadId === 'null') {
+      console.error('Invalid thread ID:', threadId);
+      setShowDashboard(true);
+      router.replace('/financial-playground', { scroll: false });
+      return;
+    }
+
     try {
       const response = await fetch(`/api/playground/threads/${threadId}`);
       if (response.ok) {
@@ -412,7 +517,7 @@ export default function FinancialPlaygroundPage() {
           localStorage.setItem(`playground_last_thread_${session.user.email}`, threadId);
         }
 
-        // Update URL
+        // Update URL only if we have a valid thread ID
         router.replace(`/financial-playground?thread=${threadId}`, { scroll: false });
 
         // Load sections if report is in interactive mode
@@ -1003,10 +1108,19 @@ export default function FinancialPlaygroundPage() {
     setIsContextModalOpen(true);
   };
 
-  if (status === 'loading') {
+  // Show loading state while authenticating or initializing
+  if (status === 'loading' || isInitializing) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="flex flex-col items-center justify-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            Loading Financial Playground
+          </h3>
+          <p className="text-sm text-gray-600">
+            {status === 'loading' ? 'Authenticating...' : 'Preparing your workspace...'}
+          </p>
+        </div>
       </div>
     );
   }

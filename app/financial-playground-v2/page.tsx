@@ -883,22 +883,56 @@ export default function FinancialPlaygroundV2() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to create thread');
+      // Handle non-OK responses
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Thread creation failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        toast.error(`Failed to create thread: ${response.statusText}`);
+        return null;
+      }
 
       const data = await response.json();
-      
+      console.log('Thread creation response:', data);
+
+      // Validate response structure
+      if (!data.thread) {
+        console.error('Invalid thread response - missing thread object:', data);
+        toast.error('Failed to create thread - invalid server response');
+        return null;
+      }
+
+      // Normalize thread ID (support both Prisma 'id' and MongoDB '_id')
+      const threadId = data.thread.id || data.thread._id;
+      if (!threadId || threadId === 'undefined' || threadId === 'null') {
+        console.error('Invalid thread ID in response:', {
+          threadId,
+          hasId: !!data.thread.id,
+          has_id: !!data.thread._id,
+          thread: data.thread
+        });
+        toast.error('Failed to create thread - invalid thread ID');
+        return null;
+      }
+
+      // Normalize the thread object to use _id for consistency
+      const normalizedThread = { ...data.thread, _id: threadId };
+
       // Set refs to prevent infinite loop
-      lastLoadedThreadRef.current = data.thread._id;
+      lastLoadedThreadRef.current = threadId;
       isUpdatingUrlRef.current = true;
-      
-      setActiveThread(data.thread);
+
+      setActiveThread(normalizedThread);
 
       // Update URL to new thread
-      router.replace(`/financial-playground-v2?thread=${data.thread._id}`, { scroll: false });
+      router.replace(`/financial-playground-v2?thread=${threadId}`, { scroll: false });
 
       // Save to localStorage
       if (session?.user?.email) {
-        localStorage.setItem(`playground_v2_last_thread_${session.user.email}`, data.thread._id);
+        localStorage.setItem(`playground_v2_last_thread_${session.user.email}`, threadId);
       }
 
       // Reset URL update flag
@@ -908,10 +942,10 @@ export default function FinancialPlaygroundV2() {
 
       mutateThreads();
       toast.success('New thread created!');
-      return data.thread;
+      return normalizedThread;
     } catch (error) {
       console.error('Error creating thread:', error);
-      toast.error('Failed to create thread');
+      toast.error(error instanceof Error ? error.message : 'Failed to create thread');
       return null;
     }
   }, [mutateThreads, router, session]);
