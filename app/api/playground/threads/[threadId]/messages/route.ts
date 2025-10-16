@@ -373,8 +373,26 @@ export async function POST(
       });
     }
 
-    // Extract settings from JSON field
+    // Extract settings from JSON field with fallback to defaults
     const settingsData = (settings.settings as any) || {};
+
+    // Default provider configuration (fallback for missing/incomplete settings)
+    const DEFAULT_PROVIDERS = [
+      {
+        id: 'anthropic',
+        name: 'Anthropic',
+        enabled: true,
+        models: [
+          {
+            id: 'claude-3-5-sonnet-20241022',
+            name: 'Claude 3.5 Sonnet',
+            enabled: true,
+            maxTokens: 8192,
+            temperature: 0.7,
+          },
+        ],
+      },
+    ];
 
     // Select system prompt based on activeSystemPromptId
     let systemPrompt = FINANCIAL_REPORT_PROMPT;
@@ -394,20 +412,22 @@ export async function POST(
       systemPrompt = settingsData.systemPrompt || FINANCIAL_REPORT_PROMPT;
     }
 
-    // Validate provider and model are enabled
-    const providers = settingsData.providers || [];
+    // Validate provider and model are enabled (with fallback to defaults)
+    const providers = settingsData.providers || DEFAULT_PROVIDERS;
     const selectedProvider = providers.find(
       (p: any) => p.id === provider && p.enabled
     );
     if (!selectedProvider) {
-      return new Response('Selected provider is not enabled', { status: 400 });
+      console.error('Provider not enabled:', { provider, availableProviders: providers.map((p: any) => ({ id: p.id, enabled: p.enabled })) });
+      return new Response(`Selected provider '${provider}' is not enabled. Please check your playground settings.`, { status: 400 });
     }
 
     const selectedModel = selectedProvider.models.find(
       (m: any) => m.id === model && m.enabled
     );
     if (!selectedModel) {
-      return new Response('Selected model is not enabled', { status: 400 });
+      console.error('Model not enabled:', { model, availableModels: selectedProvider.models.map((m: any) => ({ id: m.id, enabled: m.enabled })) });
+      return new Response(`Selected model '${model}' is not enabled. Please check your playground settings.`, { status: 400 });
     }
 
     // Get conversation history
