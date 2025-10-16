@@ -130,21 +130,41 @@ model entity_tags {
 }
 
 model messages {
-  id        String      @id
-  threadId  String
-  userId    String
-  role      MessageRole
-  content   String
-  reportId  String?
-  metadata  Json?       @default("{}")
-  createdAt DateTime    @default(now())
-  updatedAt DateTime
-  threads   threads     @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  users     users       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String             @id
+  threadId         String
+  userId           String
+  role             MessageRole
+  content          String
+  reportId         String?
+  metadata         Json?              @default("{}")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  threads          threads            @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  users            users              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message_feedback message_feedback[]
 
   @@index([reportId])
   @@index([threadId, createdAt])
   @@index([userId])
+}
+
+model message_feedback {
+  id        String           @id
+  messageId String
+  userId    String
+  feedback  FeedbackType
+  createdAt DateTime         @default(now())
+  updatedAt DateTime
+  messages  messages         @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+enum FeedbackType {
+  UP
+  DOWN
 }
 
 model playground_settings {
@@ -577,4 +597,29 @@ enum CacheType {
   MARKET_INSIGHTS
   PROJECT_CONTEXT
   SUGGESTED_TOPICS
+}
+
+enum MarketDataType {
+  STOCK_QUOTE
+  CRYPTO_PRICE
+  TRENDING_CRYPTO
+}
+
+model market_data_cache {
+  id           String         @id
+  dataType     MarketDataType
+  symbol       String         @db.VarChar(20)
+  data         Json
+  source       String         @db.VarChar(50) // 'alpha_vantage', 'coingecko'
+  fetchedAt    DateTime       @default(now())
+  expiresAt    DateTime
+  lastPrice    Float?
+  changePercent Float?
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime
+
+  @@unique([dataType, symbol])
+  @@index([dataType, expiresAt])
+  @@index([symbol])
 }

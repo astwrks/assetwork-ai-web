@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToMongoDB } from '@/lib/db/mongodb';
-import Message from '@/lib/db/models/Message';
-import MessageFeedback from '@/lib/db/models/MessageFeedback';
+import { prisma } from '@/lib/db/prisma';
+import { randomUUID } from 'crypto';
 
 /**
  * POST /api/playground/messages/[messageId]/feedback
@@ -15,7 +14,7 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -29,55 +28,65 @@ export async function POST(
       );
     }
 
-    await connectToMongoDB();
-
     // Verify message exists
-    const message = await Message.findById(messageId);
+    const message = await prisma.messages.findUnique({
+      where: { id: messageId },
+    });
+
     if (!message) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 });
     }
 
+    // Convert feedback to enum format
+    const feedbackEnum = feedback === 'up' ? 'UP' : 'DOWN';
+
     // Check if user already gave feedback for this message
-    const existingFeedback = await MessageFeedback.findOne({
-      messageId,
-      userEmail: session.user.email,
+    const existingFeedback = await prisma.message_feedback.findUnique({
+      where: {
+        messageId_userId: {
+          messageId,
+          userId: session.user.id,
+        },
+      },
     });
 
     if (existingFeedback) {
       // Update existing feedback
-      existingFeedback.feedback = feedback;
-      existingFeedback.updatedAt = new Date();
-      await existingFeedback.save();
+      await prisma.message_feedback.update({
+        where: { id: existingFeedback.id },
+        data: {
+          feedback: feedbackEnum,
+          updatedAt: new Date(),
+        },
+      });
     } else {
       // Create new feedback
-      await MessageFeedback.create({
-        messageId,
-        userEmail: session.user.email,
-        feedback,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+      await prisma.message_feedback.create({
+        data: {
+          id: randomUUID(),
+          messageId,
+          userId: session.user.id,
+          feedback: feedbackEnum,
+          updatedAt: new Date(),
+        },
       });
     }
 
     // Get feedback counts
-    const feedbackCounts = await MessageFeedback.aggregate([
-      { $match: { messageId: messageId } },
-      {
-        $group: {
-          _id: '$feedback',
-          count: { $sum: 1 },
-        },
-      },
-    ]);
+    const feedbackCounts = await prisma.message_feedback.groupBy({
+      by: ['feedback'],
+      where: { messageId },
+      _count: { feedback: true },
+    });
 
     const counts = {
       up: 0,
       down: 0,
     };
 
-    feedbackCounts.forEach((item: any) => {
-      if (item._id === 'up') counts.up = item.count;
-      if (item._id === 'down') counts.down = item.count;
+    feedbackCounts.forEach((item) => {
+      if (item.feedback === 'UP') counts.up = item._count.feedback;
+      if (item.feedback === 'DOWN') counts.down = item._count.feedback;
     });
 
     return NextResponse.json({
@@ -104,44 +113,42 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { messageId } = await params;
 
-    await connectToMongoDB();
-
     // Get feedback counts
-    const feedbackCounts = await MessageFeedback.aggregate([
-      { $match: { messageId: messageId } },
-      {
-        $group: {
-          _id: '$feedback',
-          count: { $sum: 1 },
-        },
-      },
-    ]);
+    const feedbackCounts = await prisma.message_feedback.groupBy({
+      by: ['feedback'],
+      where: { messageId },
+      _count: { feedback: true },
+    });
 
     const counts = {
       up: 0,
       down: 0,
     };
 
-    feedbackCounts.forEach((item: any) => {
-      if (item._id === 'up') counts.up = item.count;
-      if (item._id === 'down') counts.down = item.count;
+    feedbackCounts.forEach((item) => {
+      if (item.feedback === 'UP') counts.up = item._count.feedback;
+      if (item.feedback === 'DOWN') counts.down = item._count.feedback;
     });
 
     // Get user's feedback
-    const userFeedback = await MessageFeedback.findOne({
-      messageId,
-      userEmail: session.user.email,
+    const userFeedback = await prisma.message_feedback.findUnique({
+      where: {
+        messageId_userId: {
+          messageId,
+          userId: session.user.id,
+        },
+      },
     });
 
     return NextResponse.json({
       counts,
-      userFeedback: userFeedback?.feedback || null,
+      userFeedback: userFeedback?.feedback.toLowerCase() || null,
     });
   } catch (error) {
     console.error('Error fetching message feedback:', error);
