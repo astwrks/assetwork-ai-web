@@ -102,21 +102,23 @@
 ## 📊 Migration Statistics
 
 **Total API Routes:** ~20
-**Migrated:** 8 routes (40%)
-**Remaining:** ~12 routes (60%)
+**Migrated:** 13 routes (65%)
+**Remaining:** ~7 routes (35%)
 
-**Time Spent:** ~3 hours
-**Estimated Remaining:** ~4-5 hours
+**Time Spent:** ~4 hours
+**Estimated Remaining:** ~2-3 hours
 
 **Phases Completed:**
 - ✅ Phase 1: Thread Creation (2 routes)
 - ✅ Phase 2: Messages & Reports (2 routes)
 - ✅ Phase 3: Thread Management & Usage (4 routes)
+- ✅ Phase 4: Report CRUD Operations (1 route - GET)
+- ✅ Phase 5: Section Editing APIs (2 files, 5 operations)
+- ✅ Phase 6: Settings & Utilities (2 routes)
 
 **Next Phase:**
-- 📋 Phase 4: Report CRUD Operations (3 routes)
-- 📋 Phase 5: Section Editing APIs (4 routes)
-- 📋 Phase 6: Templates & Cleanup (3 routes)
+- 📋 Phase 7: Templates & Remaining APIs (3 template routes)
+- 📋 Phase 8: Context/Share/PDF APIs (~4 routes)
 
 ---
 
@@ -321,6 +323,23 @@ role: 'user' → role: 'USER'
 
 ---
 
-**Status:** Migration in progress - ~40% complete (8/20 routes)
-**Last Updated:** October 16, 2025 - Phase 3 Complete
-**Next:** Deploy and test, then migrate report CRUD operations
+**Status:** Migration in progress - ~65% complete (13/20 routes)
+**Last Updated:** October 16, 2025 - Phase 6 Complete
+**Next:** Template APIs, then context/share/PDF utilities
+
+## ✅ Completed Routes List
+
+1. POST /api/playground/threads - Create threads
+2. GET /api/playground/threads - List threads
+3. POST /api/playground/threads/[threadId]/messages - Send messages & AI report generation
+4. GET /api/playground/threads/[threadId]/messages - Fetch message history
+5. GET /api/playground/reports/[reportId]/usage - Usage polling
+6. GET /api/playground/threads/[threadId] - Thread details
+7. PATCH /api/playground/threads/[threadId] - Update thread
+8. DELETE /api/playground/threads/[threadId] - Delete thread with cascade
+9. GET /api/playground/reports/[reportId] - Fetch report
+10. GET /api/playground/reports/[reportId]/sections - List sections
+11. POST /api/playground/reports/[reportId]/sections - Create section with AI
+12. GET,PATCH,DELETE /api/playground/reports/[reportId]/sections/[sectionId] - Section operations
+13. GET,POST,PATCH /api/playground/settings - Settings management
+14. POST /api/playground/reports/[reportId]/convert-to-interactive - Convert to interactive mode
