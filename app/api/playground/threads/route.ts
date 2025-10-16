@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import Thread from '@/lib/db/models/Thread';
+import { prisma } from '@/lib/db/prisma';
+import { randomUUID } from 'crypto';
 
 // GET /api/playground/threads - Get all threads for the current user
 export async function GET(request: NextRequest) {
@@ -12,19 +12,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status') || 'active';
-    const isTemplate = searchParams.get('isTemplate') === 'true';
+    const status = searchParams.get('status');
+    const isTemplate = searchParams.get('isTemplate');
 
-    const query: any = { userId: session.user.id };
-    if (status) query.status = status;
-    if (isTemplate !== null) query.isTemplate = isTemplate;
+    // Build where clause
+    const where: any = { userId: session.user.id };
+    if (status) {
+      where.status = status.toUpperCase() as any; // 'active' -> 'ACTIVE'
+    }
+    if (isTemplate !== null) {
+      where.isTemplate = isTemplate === 'true';
+    }
 
-    const threads = await Thread.find(query)
-      .sort({ updatedAt: -1 })
-      .limit(100);
+    const threads = await prisma.threads.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    });
 
     return NextResponse.json({ threads }, { status: 200 });
   } catch (error) {
@@ -44,8 +49,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const body = await request.json();
     const { title, description, isTemplate, templateName, templateDescription } = body;
 
@@ -57,20 +60,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create new thread
-    const thread = new Thread({
-      userId: session.user.id,
-      title: title.trim(),
-      description: description?.trim(),
-      status: 'active',
-      isTemplate: isTemplate || false,
-      templateName: templateName?.trim(),
-      templateDescription: templateDescription?.trim(),
-      reportVersions: [],
-      sharedWith: [],
+    // Create new thread using Prisma
+    const thread = await prisma.threads.create({
+      data: {
+        id: randomUUID(),
+        userId: session.user.id,
+        title: title.trim(),
+        description: description?.trim() || null,
+        status: 'ACTIVE',
+        isTemplate: isTemplate || false,
+        templateName: templateName?.trim() || null,
+        templateDescription: templateDescription?.trim() || null,
+        reportVersions: [],
+        sharedWith: [],
+        metadata: {},
+        updatedAt: new Date(),
+      },
     });
-
-    await thread.save();
 
     return NextResponse.json({ thread }, { status: 201 });
   } catch (error) {
