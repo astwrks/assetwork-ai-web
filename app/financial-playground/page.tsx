@@ -168,6 +168,8 @@ export default function FinancialPlaygroundPage() {
   const [editingThreadTitle, setEditingThreadTitle] = useState('');
   const [showEmptyThreadDialog, setShowEmptyThreadDialog] = useState(false);
   const [emptyThread, setEmptyThread] = useState<Thread | null>(null);
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
     // Restore collapsed sections state from localStorage
     if (typeof window !== 'undefined' && session?.user?.email) {
@@ -191,6 +193,8 @@ export default function FinancialPlaygroundPage() {
   const justCreatedThreadRef = useRef<string | null>(null);
   const lastLoadedThreadRef = useRef<string | null>(null); // Track last loaded thread to prevent infinite loop
   const isCreatingThreadRef = useRef<boolean>(false); // Prevent simultaneous thread creation
+  const isLoadingThreadRef = useRef<boolean>(false); // Prevent simultaneous thread loading
+  const hasInitializedRef = useRef<boolean>(false); // Track if initial setup is complete
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -217,7 +221,7 @@ export default function FinancialPlaygroundPage() {
 
   // Check if user should see dashboard (returning user with threads)
   useEffect(() => {
-    if (!session || threads === undefined) return;
+    if (!session || threads === undefined || hasInitializedRef.current) return;
 
     const threadIdFromUrl = searchParams.get('thread');
     const hasValidThreadParam = threadIdFromUrl && threadIdFromUrl !== 'undefined' && threadIdFromUrl !== 'null';
@@ -228,7 +232,8 @@ export default function FinancialPlaygroundPage() {
       hasValidThreadParam,
       hasCurrentThread: !!currentThread,
       justCreatedThreadRef: justCreatedThreadRef.current,
-      isCreating: isCreatingThreadRef.current
+      isCreating: isCreatingThreadRef.current,
+      hasInitialized: hasInitializedRef.current
     });
 
     // If user has threads and no valid thread in URL, show dashboard
@@ -236,6 +241,7 @@ export default function FinancialPlaygroundPage() {
     if (threads.length > 0 && !hasValidThreadParam && !currentThread && !justCreatedThreadRef.current) {
       console.log('✅ Returning user detected - showing dashboard');
       setShowDashboard(true);
+      hasInitializedRef.current = true; // Mark as initialized
       // Clear any invalid thread params from URL
       if (threadIdFromUrl) {
         console.log('🧹 Cleaning invalid thread param from URL');
@@ -249,7 +255,12 @@ export default function FinancialPlaygroundPage() {
     ) {
       // New user with no threads - auto-create first thread (only if not already creating)
       console.log('🆕 No threads found - auto-creating first thread');
+      hasInitializedRef.current = true; // Mark as initialized
       createNewThread();
+    } else if (hasValidThreadParam && !isLoadingThreadRef.current) {
+      // If we have a valid thread param and we're not already loading, mark as initialized
+      // This prevents re-running this effect when the thread loads
+      hasInitializedRef.current = true;
     }
   }, [threads, session, currentThread, searchParams]);
 
@@ -518,7 +529,16 @@ export default function FinancialPlaygroundPage() {
       return;
     }
 
+    // Prevent loading the same thread multiple times
+    if (isLoadingThreadRef.current || lastLoadedThreadRef.current === threadId) {
+      console.log('⏭️ Skipping thread load - already loading or loaded:', threadId);
+      return;
+    }
+
     try {
+      isLoadingThreadRef.current = true;
+      console.log('📥 Loading thread:', threadId);
+
       const response = await fetch(`/api/playground/threads/${threadId}`);
       if (response.ok) {
         const data = await response.json();
@@ -532,6 +552,10 @@ export default function FinancialPlaygroundPage() {
           ...msg,
           _id: msg.id || msg._id
         }));
+
+        // Update last loaded ref BEFORE setting state to prevent re-triggers
+        lastLoadedThreadRef.current = threadId;
+
         setCurrentThread(normalizedThread);
         setMessages(normalizedMessages);
         setCurrentReport(data.currentReport);
@@ -551,10 +575,20 @@ export default function FinancialPlaygroundPage() {
         } else {
           setSections([]);
         }
+
+        console.log('✅ Thread loaded successfully:', threadId);
+      } else {
+        console.error('Failed to load thread:', response.status);
+        // If thread not found, clear it from refs
+        lastLoadedThreadRef.current = null;
+        toast.error('Thread not found');
       }
     } catch (error) {
       console.error('Error loading thread:', error);
+      lastLoadedThreadRef.current = null;
       toast.error('Failed to load conversation');
+    } finally {
+      isLoadingThreadRef.current = false;
     }
   };
 
@@ -1124,6 +1158,49 @@ export default function FinancialPlaygroundPage() {
     thread.title.toLowerCase().includes(threadSearchQuery.toLowerCase())
   );
 
+  // Bulk delete all empty threads
+  const handleBulkDeleteEmpty = async () => {
+    setBulkDeleteLoading(true);
+    try {
+      const response = await fetch('/api/playground/threads/bulk-delete-empty', {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete empty threads');
+      }
+
+      const data = await response.json();
+
+      console.log('✅ Bulk delete result:', data);
+
+      if (data.deletedCount === 0) {
+        toast.success('No empty threads found to delete');
+      } else {
+        toast.success(`Successfully deleted ${data.deletedCount} empty thread${data.deletedCount !== 1 ? 's' : ''}`);
+
+        // Reload threads to update the list
+        await loadThreads();
+
+        // If current thread was deleted, clear the view
+        if (currentThread && data.threads.some((t: any) => t.id === currentThread._id)) {
+          setCurrentThread(null);
+          setMessages([]);
+          setCurrentReport(null);
+          setSections([]);
+          router.replace('/financial-playground', { scroll: false });
+        }
+      }
+
+      setShowBulkDeleteDialog(false);
+    } catch (error) {
+      console.error('Error bulk deleting empty threads:', error);
+      toast.error('Failed to delete empty threads');
+    } finally {
+      setBulkDeleteLoading(false);
+    }
+  };
+
   // Handle using existing empty thread
   const handleUseEmptyThread = () => {
     if (emptyThread) {
@@ -1318,7 +1395,7 @@ export default function FinancialPlaygroundPage() {
                 {isSidebarOpen && (
                   <div className="w-72 border-r border-gray-200 flex flex-col">
                     {/* Search Bar */}
-                    <div className="p-3 border-b border-gray-200">
+                    <div className="p-3 border-b border-gray-200 space-y-2">
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <Input
@@ -1328,6 +1405,19 @@ export default function FinancialPlaygroundPage() {
                           className="pl-10 h-9 text-sm"
                         />
                       </div>
+
+                      {/* Bulk Delete Empty Threads Button */}
+                      {threads.some(t => t.isEmpty) && (
+                        <Button
+                          onClick={() => setShowBulkDeleteDialog(true)}
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-8 text-xs gap-2 border-red-200 hover:bg-red-50 hover:border-red-300 text-red-700 hover:text-red-800"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Clean Up Empty Threads ({threads.filter(t => t.isEmpty).length})
+                        </Button>
+                      )}
                     </div>
 
                     {/* Thread List */}
@@ -2017,6 +2107,81 @@ export default function FinancialPlaygroundPage() {
             >
               Cancel
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Empty Threads Dialog */}
+      <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              Clean Up Empty Threads
+            </DialogTitle>
+            <DialogDescription>
+              You are about to delete {threads.filter(t => t.isEmpty).length} empty conversation
+              {threads.filter(t => t.isEmpty).length !== 1 ? 's' : ''}. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">
+                Threads to be deleted:
+              </h4>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {threads
+                  .filter(t => t.isEmpty)
+                  .slice(0, 10)
+                  .map((thread) => (
+                    <div
+                      key={thread._id}
+                      className="text-sm text-gray-600 flex items-center gap-2 py-1"
+                    >
+                      <MessageSquare className="w-3 h-3 text-gray-400" />
+                      <span className="truncate">{thread.title}</span>
+                      <span className="text-xs text-gray-400">
+                        ({new Date(thread.updatedAt).toLocaleDateString()})
+                      </span>
+                    </div>
+                  ))}
+                {threads.filter(t => t.isEmpty).length > 10 && (
+                  <div className="text-sm text-gray-500 italic pt-2">
+                    ... and {threads.filter(t => t.isEmpty).length - 10} more
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => setShowBulkDeleteDialog(false)}
+                variant="outline"
+                className="flex-1"
+                disabled={bulkDeleteLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleBulkDeleteEmpty}
+                variant="destructive"
+                className="flex-1 bg-red-600 hover:bg-red-700"
+                disabled={bulkDeleteLoading}
+              >
+                {bulkDeleteLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete All
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
