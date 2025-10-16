@@ -14,7 +14,7 @@ function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('test@assetworks.ai');
-  const [password, setPassword] = useState('Test123456!');
+  const [password, setPassword] = useState('password123');
   const [loading, setLoading] = useState(false);
 
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';

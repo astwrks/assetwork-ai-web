@@ -13,6 +13,12 @@ const nextConfig: NextConfig = {
     // TODO: Fix all TypeScript errors gradually
     ignoreBuildErrors: true,
   },
+  // Suppress verbose logging
+  logging: {
+    fetches: {
+      fullUrl: false,
+    },
+  },
 };
 
 export default nextConfig;

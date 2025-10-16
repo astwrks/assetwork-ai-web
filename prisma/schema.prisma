@@ -379,21 +379,31 @@ model users {
   aiCredits            Int                  @default(100)
   credits              Int                  @default(100)
   plan                 UserPlan             @default(FREE)
+  role                 UserRole             @default(USER)
   googleId             String?              @unique
   isPublic             Boolean              @default(true)
+  isActive             Boolean              @default(true)
   theme                Theme                @default(SYSTEM)
   notificationSettings Json                 @default("{\"push\": true, \"email\": true, \"updates\": true}")
   preferences          Json?                @default("{\"theme\": \"system\", \"language\": \"en\", \"timezone\": \"UTC\", \"notifications\": {\"push\": true, \"email\": true, \"marketing\": false}}")
+  emailVerified        DateTime?
+  twoFactorEnabled     Boolean              @default(false)
+  twoFactorSecret      String?
+  lastLogin            DateTime?
+  lastFailedLogin      DateTime?
+  failedLoginAttempts  Int                  @default(0)
   createdAt            DateTime             @default(now())
   updatedAt            DateTime
-  emailVerified        DateTime?
   accounts             accounts[]
   api_keys             api_keys[]
   dashboard_cache      dashboard_cache[]
   messages             messages[]
+  notifications        notifications[]
   playground_settings  playground_settings?
   queries              queries[]
+  refreshTokens        refreshTokens[]
   reports              reports[]
+  savedReports         savedReports[]
   sessions             sessions[]
   templates            templates[]
   threads              threads[]
@@ -405,6 +415,7 @@ model users {
   @@index([createdAt])
   @@index([email])
   @@index([plan])
+  @@index([role])
 }
 
 model verification_tokens {
@@ -442,6 +453,52 @@ model user_activities {
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, eventType, createdAt(sort: Desc)])
+}
+
+model refreshTokens {
+  id        String    @id
+  token     String    @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime
+  users     users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model notifications {
+  id        String           @id
+  userId    String
+  type      NotificationType
+  title     String           @db.VarChar(200)
+  message   String
+  data      Json?            @default("{}")
+  read      Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  users     users            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model savedReports {
+  id        String   @id
+  userId    String
+  reportId  String
+  title     String   @db.VarChar(300)
+  notes     String?
+  tags      String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reportId])
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model dashboard_cache {
@@ -599,4 +656,20 @@ enum MarketDataType {
   STOCK_QUOTE
   CRYPTO_PRICE
   TRENDING_CRYPTO
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  PREMIUM
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  REPORT_READY
+  MARKET_ALERT
+  SYSTEM
 }
