@@ -219,7 +219,8 @@ export default function FinancialPlaygroundPage() {
     });
 
     // If user has threads and no valid thread in URL, show dashboard
-    if (threads.length > 0 && !hasValidThreadParam && !currentThread) {
+    // BUT don't show dashboard if we just created a new thread
+    if (threads.length > 0 && !hasValidThreadParam && !currentThread && !justCreatedThreadRef.current) {
       console.log('✅ Returning user detected - showing dashboard');
       setShowDashboard(true);
       // Clear any invalid thread params from URL
@@ -241,7 +242,7 @@ export default function FinancialPlaygroundPage() {
 
   // Handle URL thread parameter
   useEffect(() => {
-    if (threads.length === 0 || !session) return;
+    if (!session) return;
 
     const threadIdFromUrl = searchParams.get('thread');
 
@@ -259,20 +260,12 @@ export default function FinancialPlaygroundPage() {
     }
 
     if (hasValidThreadParam) {
-      // Load thread from URL and hide dashboard
-      const thread = threads.find(t => t._id === threadIdFromUrl);
-      if (thread) {
-        setShowDashboard(false);
-        lastLoadedThreadRef.current = threadIdFromUrl;
-        loadThread(threadIdFromUrl);
-      } else {
-        // Invalid thread ID - show dashboard
-        console.log('Invalid thread ID in URL - showing dashboard');
-        setShowDashboard(true);
-        router.replace('/financial-playground', { scroll: false });
-      }
+      // Hide dashboard and try to load the thread directly
+      setShowDashboard(false);
+      lastLoadedThreadRef.current = threadIdFromUrl;
+      loadThread(threadIdFromUrl);
     }
-  }, [threads, searchParams, session]);
+  }, [searchParams, session]);
 
   // Clear justCreatedThreadRef once the thread is successfully loaded
   useEffect(() => {
@@ -507,8 +500,18 @@ export default function FinancialPlaygroundPage() {
       const response = await fetch(`/api/playground/threads/${threadId}`);
       if (response.ok) {
         const data = await response.json();
-        setCurrentThread(data.thread);
-        setMessages(data.messages);
+        // Normalize thread ID (support both Prisma 'id' and MongoDB '_id')
+        const normalizedThread = {
+          ...data.thread,
+          _id: data.thread.id || data.thread._id
+        };
+        // Normalize message IDs (support both Prisma 'id' and MongoDB '_id')
+        const normalizedMessages = data.messages.map((msg: any) => ({
+          ...msg,
+          _id: msg.id || msg._id
+        }));
+        setCurrentThread(normalizedThread);
+        setMessages(normalizedMessages);
         setCurrentReport(data.currentReport);
         setStreamingContent('');
 
@@ -614,7 +617,13 @@ export default function FinancialPlaygroundPage() {
       );
 
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        const errorText = await response.text();
+        console.error('❌ Message send failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Failed to send message: ${response.status} ${errorText}`);
       }
 
       // Process streaming response

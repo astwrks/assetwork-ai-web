@@ -266,8 +266,18 @@ export default function FinancialPlaygroundV2() {
     fetcher
   );
 
-  const threads = threadsData?.threads || [];
-  const messages = messagesData?.messages || [];
+  // Normalize thread IDs (support both Prisma 'id' and MongoDB '_id')
+  const threads = (threadsData?.threads || []).map((thread: any) => ({
+    ...thread,
+    _id: thread.id || thread._id
+  }));
+
+  // Normalize message IDs (support both Prisma 'id' and MongoDB '_id')
+  const messages = (messagesData?.messages || []).map((msg: any) => ({
+    ...msg,
+    _id: msg.id || msg._id
+  }));
+
   const templates = templatesData?.templates || [];
 
   // Handle URL-based thread routing
