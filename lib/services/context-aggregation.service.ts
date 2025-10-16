@@ -87,7 +87,7 @@ export class ContextAggregationService {
       // Get entities tracked (unique)
       const entityMentions = await prisma.entity_mentions.findMany({
         where: {
-          report: {
+          reports: {
             userId,
           },
           createdAt: {
@@ -96,7 +96,7 @@ export class ContextAggregationService {
           },
         },
         include: {
-          entity: true,
+          entities: true,
         },
         distinct: ['entityId'],
       });
@@ -105,7 +105,7 @@ export class ContextAggregationService {
       const topEntities = await prisma.entity_mentions.groupBy({
         by: ['entityId'],
         where: {
-          report: {
+          reports: {
             userId,
           },
           createdAt: {
@@ -132,7 +132,7 @@ export class ContextAggregationService {
           });
           return {
             name: entity?.name || 'Unknown',
-            symbol: entity?.symbol || undefined,
+            symbol: entity?.ticker || undefined,
             mentions: item._count.entityId,
           };
         })
@@ -180,16 +180,42 @@ export class ContextAggregationService {
         })
       );
 
-      // Get templates used (estimate from reports metadata)
-      const templatesUsed = 0; // Placeholder - implement when templates are tracked
+      // Get templates used - count threads created from templates
+      const templatesUsed = await prisma.threads.count({
+        where: {
+          userId,
+          createdAt: {
+            gte: startDate,
+            lte: endDate,
+          },
+          metadata: {
+            path: ['sourceTemplateId'],
+            not: null,
+          },
+        },
+      });
 
-      // Get PDFs exported (estimate from reports)
-      const pdfsExported = 0; // Placeholder - implement export tracking
+      // Get PDFs exported - count published playground reports with PDF URLs
+      const pdfsExported = await prisma.playground_reports.count({
+        where: {
+          threads: {
+            userId,
+          },
+          isPublished: true,
+          pdfUrl: {
+            not: null,
+          },
+          publishedAt: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+      });
 
       // Get sections edited
       const sectionsEdited = await prisma.report_sections.count({
         where: {
-          report: {
+          reports: {
             userId,
           },
           updatedAt: {

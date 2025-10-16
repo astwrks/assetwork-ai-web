@@ -1,4 +1,6 @@
 import { ActivitySummary } from './context-aggregation.service';
+import prisma from '@/lib/db/prisma';
+import { randomUUID } from 'crypto';
 
 export interface MarketData {
   stocks: StockMover[];
@@ -75,8 +77,8 @@ export class MarketInsightsService {
     const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
 
     if (!apiKey) {
-      console.warn('Alpha Vantage API key not configured');
-      return this.getMockStockMovers();
+      console.warn('Alpha Vantage API key not configured, using cached data');
+      return this.getCachedStockData();
     }
 
     try {
@@ -103,7 +105,7 @@ export class MarketInsightsService {
               throw new Error('No quote data available');
             }
 
-            return {
+            const stockMover: StockMover = {
               symbol: quote['01. symbol'],
               name: symbol, // Alpha Vantage doesn't provide company name in GLOBAL_QUOTE
               price: parseFloat(quote['05. price']),
@@ -111,19 +113,27 @@ export class MarketInsightsService {
               changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
               volume: parseInt(quote['06. volume']),
             };
+
+            // Cache the stock data
+            await this.cacheStockData(stockMover);
+
+            return stockMover;
           } catch (error) {
             console.error(`Error fetching ${symbol}:`, error);
-            return null;
+            // Try to get cached data for this symbol
+            const cached = await this.getCachedStockBySymbol(symbol);
+            return cached;
           }
         })
       );
 
       const validStocks = stockData.filter((stock): stock is StockMover => stock !== null);
 
-      return validStocks.length > 0 ? validStocks : this.getMockStockMovers();
+      // If no valid stocks from API, try to get all cached data
+      return validStocks.length > 0 ? validStocks : this.getCachedStockData();
     } catch (error) {
       console.error('Error fetching stock movers:', error);
-      return this.getMockStockMovers();
+      return this.getCachedStockData();
     }
   }
 
@@ -142,19 +152,26 @@ export class MarketInsightsService {
       }
 
       const data = await response.json();
-      const trending = data.coins.slice(0, 3).map((item: any) => ({
-        id: item.item.id,
-        symbol: item.item.symbol.toUpperCase(),
-        name: item.item.name,
-        price: item.item.data?.price || 0,
-        changePercent24h: item.item.data?.price_change_percentage_24h?.usd || 0,
-        marketCap: item.item.data?.market_cap || 0,
-      }));
+      const trending = data.coins.slice(0, 3).map((item: any) => {
+        const crypto: CryptoTrending = {
+          id: item.item.id,
+          symbol: item.item.symbol.toUpperCase(),
+          name: item.item.name,
+          price: item.item.data?.price || 0,
+          changePercent24h: item.item.data?.price_change_percentage_24h?.usd || 0,
+          marketCap: item.item.data?.market_cap || 0,
+        };
+
+        // Cache crypto data in background
+        this.cacheCryptoData(crypto).catch(console.error);
+
+        return crypto;
+      });
 
       return trending;
     } catch (error) {
       console.error('Error fetching trending crypto:', error);
-      return this.getMockCryptoData();
+      return this.getCachedCryptoData();
     }
   }
 
@@ -332,59 +349,146 @@ export class MarketInsightsService {
   }
 
   /**
-   * Mock stock data (fallback)
+   * Cache stock data in database
    */
-  private getMockStockMovers(): StockMover[] {
-    return [
-      {
-        symbol: 'AAPL',
-        name: 'Apple Inc.',
-        price: 178.52,
-        change: 2.34,
-        changePercent: 1.33,
-        volume: 45678900,
-      },
-      {
-        symbol: 'TSLA',
-        name: 'Tesla Inc.',
-        price: 242.84,
-        change: -3.21,
-        changePercent: -1.30,
-        volume: 98765432,
-      },
-      {
-        symbol: 'NVDA',
-        name: 'NVIDIA Corp.',
-        price: 495.22,
-        change: 8.76,
-        changePercent: 1.80,
-        volume: 34567890,
-      },
-    ];
+  private async cacheStockData(stock: StockMover): Promise<void> {
+    try {
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1); // Cache for 1 hour
+
+      await prisma.market_data_cache.upsert({
+        where: {
+          dataType_symbol: {
+            dataType: 'STOCK_QUOTE',
+            symbol: stock.symbol,
+          },
+        },
+        create: {
+          id: randomUUID(),
+          dataType: 'STOCK_QUOTE',
+          symbol: stock.symbol,
+          data: stock,
+          source: 'alpha_vantage',
+          lastPrice: stock.price,
+          changePercent: stock.changePercent,
+          expiresAt,
+        },
+        update: {
+          data: stock,
+          lastPrice: stock.price,
+          changePercent: stock.changePercent,
+          fetchedAt: new Date(),
+          expiresAt,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error('Error caching stock data:', error);
+    }
   }
 
   /**
-   * Mock crypto data (fallback)
+   * Get cached stock data from database
    */
-  private getMockCryptoData(): CryptoTrending[] {
-    return [
-      {
-        id: 'bitcoin',
-        symbol: 'BTC',
-        name: 'Bitcoin',
-        price: 65200,
-        changePercent24h: 2.45,
-        marketCap: 1280000000000,
-      },
-      {
-        id: 'ethereum',
-        symbol: 'ETH',
-        name: 'Ethereum',
-        price: 3420,
-        changePercent24h: 3.12,
-        marketCap: 410000000000,
-      },
-    ];
+  private async getCachedStockData(): Promise<StockMover[]> {
+    try {
+      const cached = await prisma.market_data_cache.findMany({
+        where: {
+          dataType: 'STOCK_QUOTE',
+        },
+        orderBy: {
+          fetchedAt: 'desc',
+        },
+        take: 6,
+      });
+
+      return cached.map((item) => item.data as StockMover);
+    } catch (error) {
+      console.error('Error retrieving cached stock data:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get cached stock by symbol
+   */
+  private async getCachedStockBySymbol(symbol: string): Promise<StockMover | null> {
+    try {
+      const cached = await prisma.market_data_cache.findUnique({
+        where: {
+          dataType_symbol: {
+            dataType: 'STOCK_QUOTE',
+            symbol,
+          },
+        },
+      });
+
+      return cached ? (cached.data as StockMover) : null;
+    } catch (error) {
+      console.error(`Error retrieving cached stock ${symbol}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Cache crypto data in database
+   */
+  private async cacheCryptoData(crypto: CryptoTrending): Promise<void> {
+    try {
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 1); // Cache for 1 hour
+
+      await prisma.market_data_cache.upsert({
+        where: {
+          dataType_symbol: {
+            dataType: 'TRENDING_CRYPTO',
+            symbol: crypto.symbol,
+          },
+        },
+        create: {
+          id: randomUUID(),
+          dataType: 'TRENDING_CRYPTO',
+          symbol: crypto.symbol,
+          data: crypto,
+          source: 'coingecko',
+          lastPrice: crypto.price,
+          changePercent: crypto.changePercent24h,
+          expiresAt,
+        },
+        update: {
+          data: crypto,
+          lastPrice: crypto.price,
+          changePercent: crypto.changePercent24h,
+          fetchedAt: new Date(),
+          expiresAt,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error('Error caching crypto data:', error);
+    }
+  }
+
+  /**
+   * Get cached crypto data from database
+   */
+  private async getCachedCryptoData(): Promise<CryptoTrending[]> {
+    try {
+      const cached = await prisma.market_data_cache.findMany({
+        where: {
+          dataType: 'TRENDING_CRYPTO',
+        },
+        orderBy: {
+          fetchedAt: 'desc',
+        },
+        take: 3,
+      });
+
+      return cached.map((item) => item.data as CryptoTrending);
+    } catch (error) {
+      console.error('Error retrieving cached crypto data:', error);
+      return [];
+    }
   }
 }
 

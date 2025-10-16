@@ -139,9 +139,9 @@ model messages {
   metadata         Json?              @default("{}")
   createdAt        DateTime           @default(now())
   updatedAt        DateTime
+  message_feedback message_feedback[]
   threads          threads            @relation(fields: [threadId], references: [id], onDelete: Cascade)
   users            users              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  message_feedback message_feedback[]
 
   @@index([reportId])
   @@index([threadId, createdAt])
@@ -149,22 +149,17 @@ model messages {
 }
 
 model message_feedback {
-  id        String           @id
+  id        String       @id
   messageId String
   userId    String
   feedback  FeedbackType
-  createdAt DateTime         @default(now())
+  createdAt DateTime     @default(now())
   updatedAt DateTime
-  messages  messages         @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messages  messages     @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId])
   @@index([messageId])
   @@index([userId])
-}
-
-enum FeedbackType {
-  UP
-  DOWN
 }
 
 model playground_settings {
@@ -235,45 +230,36 @@ model reports {
 }
 
 model playground_reports {
-  id                String   @id
+  id                String    @id
   threadId          String
-  version           Int      @default(1)
-  parentReportId    String? // For version control
-  htmlContent       String // Full HTML content
-  sections          Json[]   @default([]) // Embedded sections
-  sectionRefs       String[] @default([]) // References to report_sections
-  insights          Json[]   @default([]) // Insights array
-  isInteractiveMode Boolean  @default(false)
-
-  // Metadata
-  metadata       Json?    @default("{}")
-  generatedBy    String?
-  model          String?
-  provider       String?
-  prompt         String?
-  dataSources    String[] @default([])
-  generationTime Int? // milliseconds
-
-  // Usage tracking
-  totalTokens Int    @default(0)
-  totalCost   Float  @default(0)
-  operations  Json[] @default([]) // Array of usage operations
-
-  // Public sharing
-  shareId        String?   @unique
-  isShareActive  Boolean   @default(false)
-  shareCreatedAt DateTime?
-  shareCreatedBy String?
-  shareExpiresAt DateTime?
-
-  // Publishing
-  pdfUrl      String?
-  isPublished Boolean   @default(false)
-  publishedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime
-  threads   threads  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  version           Int       @default(1)
+  parentReportId    String?
+  htmlContent       String
+  sections          Json[]    @default([])
+  sectionRefs       String[]  @default([])
+  insights          Json[]    @default([])
+  isInteractiveMode Boolean   @default(false)
+  metadata          Json?     @default("{}")
+  generatedBy       String?
+  model             String?
+  provider          String?
+  prompt            String?
+  dataSources       String[]  @default([])
+  generationTime    Int?
+  totalTokens       Int       @default(0)
+  totalCost         Float     @default(0)
+  operations        Json[]    @default([])
+  shareId           String?   @unique
+  isShareActive     Boolean   @default(false)
+  shareCreatedAt    DateTime?
+  shareCreatedBy    String?
+  shareExpiresAt    DateTime?
+  pdfUrl            String?
+  isPublished       Boolean   @default(false)
+  publishedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime
+  threads           threads   @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, version(sort: Desc)])
   @@index([threadId, createdAt(sort: Desc)])
@@ -282,46 +268,33 @@ model playground_reports {
 }
 
 model context_snapshots {
-  id         String             @id
-  entityType EntitySnapshotType
-  entityId   String
-  slug       String             @unique
-
-  // Content
-  markdownContent String
-  summary         String @default("")
-
-  // Versioning
-  version     Int      @default(1)
-  lastUpdated DateTime @default(now())
-
-  // Statistics
-  wordCount      Int  @default(0)
-  characterCount Int  @default(0)
-  messageCount   Int?
-  reportCount    Int?
-  sectionCount   Int?
-  totalTokens    Int?
-
-  // Visibility
-  visibility SnapshotVisibility @default(PRIVATE)
-  isPublic   Boolean            @default(false)
-  userId     String
-  sharedWith String[]           @default([])
-
-  // SEO Metadata
-  seoTitle       String
-  seoDescription String
-  seoKeywords    String[] @default([])
-  ogImage        String?
-
-  // Update tracking
-  lastContentUpdate      DateTime @default(now())
-  lastSnapshotGeneration DateTime @default(now())
-  updateTrigger          String   @default("initial_creation")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime
+  id                     String             @id
+  entityType             EntitySnapshotType
+  entityId               String
+  slug                   String             @unique
+  markdownContent        String
+  summary                String             @default("")
+  version                Int                @default(1)
+  lastUpdated            DateTime           @default(now())
+  wordCount              Int                @default(0)
+  characterCount         Int                @default(0)
+  messageCount           Int?
+  reportCount            Int?
+  sectionCount           Int?
+  totalTokens            Int?
+  visibility             SnapshotVisibility @default(PRIVATE)
+  isPublic               Boolean            @default(false)
+  userId                 String
+  sharedWith             String[]           @default([])
+  seoTitle               String
+  seoDescription         String
+  seoKeywords            String[]           @default([])
+  ogImage                String?
+  lastContentUpdate      DateTime           @default(now())
+  lastSnapshotGeneration DateTime           @default(now())
+  updateTrigger          String             @default("initial_creation")
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime
 
   @@unique([entityType, entityId])
   @@index([userId, isPublic])
@@ -487,6 +460,29 @@ model dashboard_cache {
   @@index([expiresAt])
 }
 
+model market_data_cache {
+  id            String         @id
+  dataType      MarketDataType
+  symbol        String         @db.VarChar(20)
+  data          Json
+  source        String         @db.VarChar(50)
+  fetchedAt     DateTime       @default(now())
+  expiresAt     DateTime
+  lastPrice     Float?
+  changePercent Float?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime
+
+  @@unique([dataType, symbol])
+  @@index([dataType, expiresAt])
+  @@index([symbol])
+}
+
+enum FeedbackType {
+  UP
+  DOWN
+}
+
 enum ApiProvider {
   OPENAI
   ANTHROPIC
@@ -603,23 +599,4 @@ enum MarketDataType {
   STOCK_QUOTE
   CRYPTO_PRICE
   TRENDING_CRYPTO
-}
-
-model market_data_cache {
-  id           String         @id
-  dataType     MarketDataType
-  symbol       String         @db.VarChar(20)
-  data         Json
-  source       String         @db.VarChar(50) // 'alpha_vantage', 'coingecko'
-  fetchedAt    DateTime       @default(now())
-  expiresAt    DateTime
-  lastPrice    Float?
-  changePercent Float?
-
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime
-
-  @@unique([dataType, symbol])
-  @@index([dataType, expiresAt])
-  @@index([symbol])
 }
