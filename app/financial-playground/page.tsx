@@ -66,6 +66,15 @@ interface Thread {
   description?: string;
   status: string;
   updatedAt: string;
+  firstMessage?: {
+    id: string;
+    content: string;
+    role: string;
+    createdAt: string;
+  } | null;
+  messageCount?: number;
+  reportCount?: number;
+  isEmpty?: boolean;
 }
 
 interface Message {
@@ -73,6 +82,8 @@ interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   createdAt: string;
+  metadata?: Record<string, any>;
+  reportId?: string;
 }
 
 interface Report {
@@ -155,6 +166,8 @@ export default function FinancialPlaygroundPage() {
   const [threadSearchQuery, setThreadSearchQuery] = useState('');
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [editingThreadTitle, setEditingThreadTitle] = useState('');
+  const [showEmptyThreadDialog, setShowEmptyThreadDialog] = useState(false);
+  const [emptyThread, setEmptyThread] = useState<Thread | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
     // Restore collapsed sections state from localStorage
     if (typeof window !== 'undefined' && session?.user?.email) {
@@ -394,6 +407,15 @@ export default function FinancialPlaygroundPage() {
     // Prevent simultaneous thread creation
     if (isCreatingThreadRef.current) {
       console.log('🚫 Thread creation already in progress, skipping...');
+      return;
+    }
+
+    // Check for empty threads
+    const existingEmptyThread = threads.find((t) => t.isEmpty === true);
+    if (existingEmptyThread) {
+      console.log('⚠️ Found existing empty thread:', existingEmptyThread);
+      setEmptyThread(existingEmptyThread);
+      setShowEmptyThreadDialog(true);
       return;
     }
 
@@ -1047,8 +1069,8 @@ export default function FinancialPlaygroundPage() {
   };
 
   // Thread management functions
-  const deleteThread = async (threadId: string) => {
-    if (!confirm('Are you sure you want to delete this conversation? This cannot be undone.')) {
+  const deleteThread = async (threadId: string, skipConfirmation = false) => {
+    if (!skipConfirmation && !confirm('Are you sure you want to delete this conversation? This cannot be undone.')) {
       return;
     }
 
@@ -1101,6 +1123,84 @@ export default function FinancialPlaygroundPage() {
   const filteredThreads = threads.filter(thread =>
     thread.title.toLowerCase().includes(threadSearchQuery.toLowerCase())
   );
+
+  // Handle using existing empty thread
+  const handleUseEmptyThread = () => {
+    if (emptyThread) {
+      loadThread(emptyThread._id);
+      setShowEmptyThreadDialog(false);
+      setEmptyThread(null);
+    }
+  };
+
+  // Handle deleting empty thread and creating new one
+  const handleDeleteAndCreateNew = async () => {
+    if (emptyThread) {
+      try {
+        await deleteThread(emptyThread._id, true); // Skip confirmation for empty threads
+        setShowEmptyThreadDialog(false);
+        setEmptyThread(null);
+        // Now create new thread
+        await createNewThreadForced();
+      } catch (error) {
+        console.error('Error deleting empty thread:', error);
+        toast.error('Failed to delete empty thread');
+      }
+    }
+  };
+
+  // Force create new thread (bypass empty thread check)
+  const createNewThreadForced = async () => {
+    try {
+      isCreatingThreadRef.current = true;
+      console.log('✅ Force creating new thread...');
+
+      const response = await fetch('/api/playground/threads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'New Financial Report',
+          description: 'Generated report',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create thread');
+      }
+
+      const data = await response.json();
+      const threadId = data.thread.id || data.thread._id;
+      const normalizedThread = { ...data.thread, _id: threadId };
+
+      justCreatedThreadRef.current = threadId;
+      setMessages([]);
+      setCurrentReport(null);
+      setStreamingContent('');
+      setSections([]);
+      setSelectedSectionId(null);
+      setEditingContext(null);
+      setSectionPreviewContent({});
+      setSectionStreamingState({});
+      setShowDashboard(false);
+
+      setCurrentThread(normalizedThread);
+      setThreads([normalizedThread, ...threads]);
+
+      if (session?.user?.email) {
+        localStorage.setItem(`playground_last_thread_${session.user.email}`, threadId);
+      }
+      router.replace(`/financial-playground?thread=${threadId}`, { scroll: false });
+
+      toast.success('New conversation started');
+    } catch (error) {
+      console.error('Error creating thread:', error);
+      toast.error('Failed to create conversation');
+    } finally {
+      setTimeout(() => {
+        isCreatingThreadRef.current = false;
+      }, 1000);
+    }
+  };
 
   // Handle share button click - open dialog
   const handleShare = () => {
@@ -1305,8 +1405,26 @@ export default function FinancialPlaygroundPage() {
                                     <div className="font-medium text-sm truncate pr-8">
                                       {thread.title}
                                     </div>
+                                    {/* Show preview from first message or empty indicator */}
+                                    {thread.isEmpty ? (
+                                      <div className="text-xs text-gray-400 italic mt-1">
+                                        Empty conversation
+                                      </div>
+                                    ) : thread.firstMessage ? (
+                                      <div className="text-xs text-gray-600 mt-1 line-clamp-2">
+                                        {thread.firstMessage.content.substring(0, 80)}
+                                        {thread.firstMessage.content.length > 80 ? '...' : ''}
+                                      </div>
+                                    ) : null}
                                     <div className="text-xs text-gray-500 mt-1 flex items-center justify-between">
-                                      <span>{new Date(thread.updatedAt).toLocaleDateString()}</span>
+                                      <div className="flex items-center gap-2">
+                                        <span>{new Date(thread.updatedAt).toLocaleDateString()}</span>
+                                        {thread.messageCount !== undefined && (
+                                          <span className="text-xs text-gray-400">
+                                            • {thread.messageCount} msg{thread.messageCount !== 1 ? 's' : ''}
+                                          </span>
+                                        )}
+                                      </div>
                                       <span className="text-xs text-gray-400">
                                         {new Date(thread.updatedAt).toLocaleTimeString([], {
                                           hour: '2-digit',
@@ -1421,7 +1539,8 @@ export default function FinancialPlaygroundPage() {
                             createdAt={message.createdAt}
                             threadId={currentThread?._id || ''}
                             role={message.role}
-                            reportId={currentReport?._id}
+                            reportId={message.reportId || currentReport?._id}
+                            metadata={message.metadata}
                           />
                         </div>
                       </div>
@@ -1846,6 +1965,61 @@ export default function FinancialPlaygroundPage() {
           currentTokens={contextModalEntity.tokens}
         />
       )}
+
+      {/* Empty Thread Dialog */}
+      <Dialog open={showEmptyThreadDialog} onOpenChange={setShowEmptyThreadDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-orange-600" />
+              Empty Conversation Found
+            </DialogTitle>
+            <DialogDescription>
+              You have an empty conversation "{emptyThread?.title}". Would you like to:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 py-4">
+            <Button
+              onClick={handleUseEmptyThread}
+              className="w-full h-auto py-4 flex flex-col gap-2 bg-blue-600 hover:bg-blue-700"
+            >
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5" />
+                <span className="font-semibold">Use Existing Empty Conversation</span>
+              </div>
+              <span className="text-xs text-blue-100">
+                Continue in the empty conversation instead of creating a new one
+              </span>
+            </Button>
+
+            <Button
+              onClick={handleDeleteAndCreateNew}
+              variant="outline"
+              className="w-full h-auto py-4 flex flex-col gap-2 border-red-300 hover:bg-red-50 hover:border-red-400"
+            >
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-red-600" />
+                <span className="font-semibold text-red-700">Delete Empty & Create New</span>
+              </div>
+              <span className="text-xs text-gray-600">
+                Remove the empty conversation and start a new one
+              </span>
+            </Button>
+
+            <Button
+              onClick={() => {
+                setShowEmptyThreadDialog(false);
+                setEmptyThread(null);
+              }}
+              variant="ghost"
+              className="w-full"
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

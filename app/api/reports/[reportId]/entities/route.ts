@@ -19,20 +19,30 @@ export async function GET(
 
     const { reportId } = await params;
 
-    // Verify report exists and user has access
-    const report = await prisma.reports.findUnique({
+    // Verify report exists and user has access through thread
+    const report = await prisma.playground_reports.findUnique({
       where: { id: reportId },
-      select: { userId: true },
+      include: {
+        threads: {
+          select: { userId: true },
+        },
+      },
     });
 
     if (!report) {
+      console.error('❌ Report not found:', reportId);
       return NextResponse.json(
         { success: false, error: 'Report not found' },
         { status: 404 }
       );
     }
 
-    if (report.userId !== session.user.id) {
+    if (report.threads.userId !== session.user.id) {
+      console.error('❌ Access denied to report:', {
+        reportId,
+        reportUserId: report.threads.userId,
+        sessionUserId: session.user.id,
+      });
       return NextResponse.json(
         { success: false, error: 'Access denied' },
         { status: 403 }
@@ -67,15 +77,30 @@ export async function GET(
       metadata: m.metadata,
     }));
 
+    console.log('✅ Successfully fetched entities:', {
+      reportId,
+      entityCount: entities.length,
+      mentionCount: mentions.length,
+    });
+
     return NextResponse.json({
       success: true,
       entities,
       total: entities.length,
     });
   } catch (error) {
-    console.error('Failed to fetch report entities:', error);
+    console.error('❌ Failed to fetch report entities:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      reportId: (await params).reportId,
+    });
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch entities' },
+      {
+        success: false,
+        error: 'Failed to fetch entities',
+        details: error instanceof Error ? error.message : String(error),
+        entities: [], // Return empty array on error so UI doesn't break
+      },
       { status: 500 }
     );
   }

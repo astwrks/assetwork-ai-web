@@ -54,7 +54,8 @@ export default function ContextDetailsModal({
           status: response.status,
           error,
           entityType,
-          entityId
+          entityId,
+          url: `/api/playground/${entityType}s/${entityId}/context-markdown`
         });
         // Provide user-friendly error message
         if (response.status === 403) {
@@ -62,7 +63,8 @@ export default function ContextDetailsModal({
         } else if (response.status === 404) {
           throw new Error(`${entityType === 'thread' ? 'Thread' : 'Report'} not found.`);
         }
-        throw new Error(error.error || `Failed to fetch context (${response.status})`);
+        const errorMessage = error.details || error.error || `Failed to fetch context (${response.status})`;
+        throw new Error(errorMessage);
       }
       const data = await response.json();
       console.log('✅ Context loaded:', { entityType, entityId, markdownLength: data.markdown?.length });

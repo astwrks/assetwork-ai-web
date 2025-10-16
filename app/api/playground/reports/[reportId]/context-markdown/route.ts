@@ -142,9 +142,16 @@ export async function GET(
       { status: 200 }
     );
   } catch (error) {
-    console.error('Error fetching report context markdown:', error);
+    console.error('❌ Error fetching report context markdown:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      reportId: (await params).reportId,
+    });
     return NextResponse.json(
-      { error: 'Failed to fetch context markdown' },
+      {
+        error: 'Failed to fetch context markdown',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

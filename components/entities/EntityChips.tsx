@@ -31,13 +31,33 @@ export function EntityChips({ reportId, className = '' }: EntityChipsProps) {
 
   const fetchEntities = async () => {
     try {
+      console.log('🔍 Fetching entities for report:', reportId);
       const response = await fetch(`/api/reports/${reportId}/entities`);
-      if (response.ok) {
-        const data = await response.json();
-        setEntities(data.entities || []);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('❌ Failed to fetch entities:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+          reportId,
+        });
+        setEntities([]);
+        return;
       }
+
+      const data = await response.json();
+      console.log('✅ Entities loaded:', {
+        count: data.entities?.length || 0,
+        reportId,
+      });
+      setEntities(data.entities || []);
     } catch (error) {
-      console.error('Failed to fetch entities:', error);
+      console.error('❌ Exception fetching entities:', {
+        error: error instanceof Error ? error.message : String(error),
+        reportId,
+      });
+      setEntities([]);
     } finally {
       setLoading(false);
     }

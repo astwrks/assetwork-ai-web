@@ -29,9 +29,38 @@ export async function GET(request: NextRequest) {
       where,
       orderBy: { updatedAt: 'desc' },
       take: 100,
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+          select: {
+            id: true,
+            content: true,
+            role: true,
+            createdAt: true,
+          },
+        },
+        _count: {
+          select: {
+            messages: true,
+            playground_reports: true,
+          },
+        },
+      },
     });
 
-    return NextResponse.json({ threads }, { status: 200 });
+    // Format threads with preview
+    const threadsWithPreview = threads.map((thread) => ({
+      ...thread,
+      firstMessage: thread.messages[0] || null,
+      messageCount: thread._count.messages,
+      reportCount: thread._count.playground_reports,
+      isEmpty: thread._count.messages === 0,
+      messages: undefined, // Remove messages array from response
+      _count: undefined, // Remove _count from response
+    }));
+
+    return NextResponse.json({ threads: threadsWithPreview }, { status: 200 });
   } catch (error) {
     console.error('Error fetching threads:', error);
     return NextResponse.json(
