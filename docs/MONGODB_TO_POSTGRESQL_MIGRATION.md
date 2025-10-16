@@ -16,11 +16,20 @@
 - [x] Verified: `threads`, `messages`, `templates`, `report_sections` already exist in Prisma
 
 ### 2. API Routes Migrated
-- [x] `/app/api/playground/threads/route.ts` (GET, POST)
-  - Thread creation now uses Prisma ✅
-  - Thread listing now uses Prisma ✅
-  - Uses `randomUUID()` for ID generation
-  - Status values converted to uppercase (ACTIVE vs active)
+
+**Phase 1: Thread Creation** ✅
+- [x] `/app/api/playground/threads/route.ts` (POST) - Create threads
+- [x] `/app/api/playground/threads/route.ts` (GET) - List threads
+
+**Phase 2: Messages & Reports** ✅
+- [x] `/app/api/playground/threads/[threadId]/messages/route.ts` (POST) - Send messages & generate reports
+- [x] `/app/api/playground/threads/[threadId]/messages/route.ts` (GET) - Fetch message history
+
+**Phase 3: Thread Management & Usage** ✅
+- [x] `/app/api/playground/reports/[reportId]/usage/route.ts` (GET) - Real-time usage polling
+- [x] `/app/api/playground/threads/[threadId]/route.ts` (GET) - Get thread details
+- [x] `/app/api/playground/threads/[threadId]/route.ts` (PATCH) - Update thread
+- [x] `/app/api/playground/threads/[threadId]/route.ts` (DELETE) - Delete thread (with cascade)
 
 ---
 
@@ -92,15 +101,22 @@
 
 ## 📊 Migration Statistics
 
-**Total API Routes:** ~15
-**Migrated:** 1 (thread creation/listing)
-**Remaining:** ~14
+**Total API Routes:** ~20
+**Migrated:** 8 routes (40%)
+**Remaining:** ~12 routes (60%)
 
-**Estimated Effort:**
-- High Priority: 3 routes × 2 hours = 6 hours
-- Medium Priority: 4 routes × 1 hour = 4 hours
-- Lower Priority: 7 routes × 30 min = 3.5 hours
-- **Total:** ~13.5 hours of development
+**Time Spent:** ~3 hours
+**Estimated Remaining:** ~4-5 hours
+
+**Phases Completed:**
+- ✅ Phase 1: Thread Creation (2 routes)
+- ✅ Phase 2: Messages & Reports (2 routes)
+- ✅ Phase 3: Thread Management & Usage (4 routes)
+
+**Next Phase:**
+- 📋 Phase 4: Report CRUD Operations (3 routes)
+- 📋 Phase 5: Section Editing APIs (4 routes)
+- 📋 Phase 6: Templates & Cleanup (3 routes)
 
 ---
 
@@ -305,5 +321,6 @@ role: 'user' → role: 'USER'
 
 ---
 
-**Status:** Migration in progress - 7% complete (1/14 routes)
-**Next:** Test thread creation, then migrate messages API
+**Status:** Migration in progress - ~40% complete (8/20 routes)
+**Last Updated:** October 16, 2025 - Phase 3 Complete
+**Next:** Deploy and test, then migrate report CRUD operations
