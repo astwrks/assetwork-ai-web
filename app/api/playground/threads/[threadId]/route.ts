@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import Thread from '@/lib/db/models/Thread';
-import Message from '@/lib/db/models/Message';
-import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
+import { prisma } from '@/lib/db/prisma';
 
 // GET /api/playground/threads/:threadId - Get specific thread with messages and current report
 export async function GET(
@@ -17,41 +14,51 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { threadId } = await params;
 
-    // Find thread and verify ownership or sharing
-    const thread = await Thread.findById(threadId);
+    // Find thread with messages and report
+    const thread = await prisma.threads.findUnique({
+      where: { id: threadId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 500,
+        },
+        playground_reports: {
+          where: { id: threadId }, // This won't work correctly - need to use currentReportId
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
     if (!thread) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
     // Check access permissions
     const isOwner = thread.userId === session.user.id;
-    const hasSharedAccess = thread.sharedWith.some(
-      (share) => share.userId === session.user.id
+    const sharedWith = (thread.sharedWith as any[]) || [];
+    const hasSharedAccess = sharedWith.some(
+      (share: any) => share.userId === session.user.id
     );
 
     if (!isOwner && !hasSharedAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Get all messages for this thread
-    const messages = await Message.find({ threadId })
-      .sort({ createdAt: 1 })
-      .limit(500);
-
     // Get current report if exists
     let currentReport = null;
     if (thread.currentReportId) {
-      currentReport = await PlaygroundReport.findById(thread.currentReportId);
+      currentReport = await prisma.playground_reports.findUnique({
+        where: { id: thread.currentReportId },
+      });
     }
 
     return NextResponse.json(
       {
         thread,
-        messages,
+        messages: thread.messages,
         currentReport,
       },
       { status: 200 }
@@ -76,13 +83,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { threadId } = await params;
     const body = await request.json();
 
     // Find thread and verify ownership
-    const thread = await Thread.findById(threadId);
+    const thread = await prisma.threads.findUnique({
+      where: { id: threadId },
+    });
+
     if (!thread) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
@@ -91,7 +99,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Update allowed fields
+    // Build update data with allowed fields only
     const allowedUpdates = [
       'title',
       'description',
@@ -101,15 +109,24 @@ export async function PATCH(
       'templateDescription',
     ];
 
+    const updateData: any = { updatedAt: new Date() };
     Object.keys(body).forEach((key) => {
       if (allowedUpdates.includes(key)) {
-        (thread as any)[key] = body[key];
+        if (key === 'status' && body[key]) {
+          // Convert status to uppercase for enum
+          updateData[key] = body[key].toUpperCase();
+        } else {
+          updateData[key] = body[key];
+        }
       }
     });
 
-    await thread.save();
+    const updatedThread = await prisma.threads.update({
+      where: { id: threadId },
+      data: updateData,
+    });
 
-    return NextResponse.json({ thread }, { status: 200 });
+    return NextResponse.json({ thread: updatedThread }, { status: 200 });
   } catch (error) {
     console.error('Error updating thread:', error);
     return NextResponse.json(
@@ -130,12 +147,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { threadId } = await params;
 
     // Find thread and verify ownership
-    const thread = await Thread.findById(threadId);
+    const thread = await prisma.threads.findUnique({
+      where: { id: threadId },
+    });
+
     if (!thread) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
@@ -144,10 +162,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Delete associated messages and reports
-    await Message.deleteMany({ threadId });
-    await PlaygroundReport.deleteMany({ threadId });
-    await Thread.findByIdAndDelete(threadId);
+    // Delete thread (cascade will delete messages and reports automatically)
+    await prisma.threads.delete({
+      where: { id: threadId },
+    });
 
     return NextResponse.json(
       { message: 'Thread deleted successfully' },

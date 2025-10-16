@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
+import { prisma } from '@/lib/db/prisma';
 
 // GET /api/playground/reports/:reportId/usage - Get usage metrics for a report
 export async function GET(
@@ -14,12 +13,18 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { reportId } = await params;
 
     // Find the report
-    const report = await PlaygroundReport.findById(reportId).lean();
+    const report = await prisma.playground_reports.findUnique({
+      where: { id: reportId },
+      select: {
+        totalTokens: true,
+        totalCost: true,
+        operations: true,
+      },
+    });
+
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
@@ -27,10 +32,10 @@ export async function GET(
     // Return usage data
     return NextResponse.json({
       success: true,
-      usage: report.usage || {
-        totalTokens: 0,
-        totalCost: 0,
-        operations: [],
+      usage: {
+        totalTokens: report.totalTokens || 0,
+        totalCost: report.totalCost || 0,
+        operations: (report.operations as any[]) || [],
       },
     });
   } catch (error) {
