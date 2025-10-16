@@ -22,6 +22,13 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+interface SystemPrompt {
+  id: string;
+  name: string;
+  description: string;
+  content?: string;
+}
+
 interface AIModel {
   id: string;
   name: string;
@@ -76,6 +83,10 @@ export default function PlaygroundSettingsPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState('prompt');
 
+  // System Prompts state
+  const [systemPrompts, setSystemPrompts] = useState<SystemPrompt[]>([]);
+  const [activeSystemPromptId, setActiveSystemPromptId] = useState<string>('web-report');
+
   // Redirect if not authenticated
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -97,6 +108,12 @@ export default function PlaygroundSettingsPage() {
       if (response.ok) {
         const data = await response.json();
         setSettings(data.settings);
+
+        // Load system prompts if available
+        if (data.settings?.systemPrompts) {
+          setSystemPrompts(data.settings.systemPrompts);
+          setActiveSystemPromptId(data.settings.activeSystemPromptId || 'web-report');
+        }
       } else {
         toast.error('Failed to load settings');
       }
@@ -182,6 +199,30 @@ export default function PlaygroundSettingsPage() {
         : p
     );
     updateSettings({ providers: updatedProviders });
+  };
+
+  // Switch system prompt
+  const switchSystemPrompt = async (promptId: string) => {
+    try {
+      const response = await fetch('/api/playground/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activeSystemPromptId: promptId }),
+      });
+
+      if (response.ok) {
+        setActiveSystemPromptId(promptId);
+        const selectedPrompt = systemPrompts.find(p => p.id === promptId);
+        toast.success(`Switched to ${selectedPrompt?.name || 'new prompt'}`);
+        // Reload settings to get the new system prompt content
+        await loadSettings();
+      } else {
+        toast.error('Failed to switch system prompt');
+      }
+    } catch (error) {
+      console.error('Error switching system prompt:', error);
+      toast.error('Failed to switch system prompt');
+    }
   };
 
   if (isLoading) {
@@ -303,9 +344,47 @@ export default function PlaygroundSettingsPage() {
               </div>
 
               <div className="space-y-4">
+                {/* System Prompt Selector */}
+                {systemPrompts.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-foreground">
+                      Active System Prompt
+                    </label>
+                    <div className="grid grid-cols-1 gap-3">
+                      {systemPrompts.map((prompt) => {
+                        const isActive = activeSystemPromptId === prompt.id;
+                        return (
+                          <button
+                            key={prompt.id}
+                            onClick={() => switchSystemPrompt(prompt.id)}
+                            className={`p-4 border-2 rounded-lg text-left transition-all ${
+                              isActive
+                                ? 'border-primary bg-primary/5 shadow-md'
+                                : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-semibold text-foreground">{prompt.name}</h4>
+                                {isActive && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-primary text-primary-foreground rounded-full">
+                                    <Check className="w-3 h-3" />
+                                    Active
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{prompt.description}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    System Prompt
+                    System Prompt Content
                   </label>
                   <textarea
                     value={settings.systemPrompt}

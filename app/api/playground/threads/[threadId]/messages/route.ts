@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import Thread from '@/lib/db/models/Thread';
-import Message from '@/lib/db/models/Message';
-import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
+import { prisma } from '@/lib/db/prisma';
+import { randomUUID } from 'crypto';
 import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
 import { trackReportUsage } from '@/lib/ai/usage-tracker';
 import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
 import { syncReportToPrisma } from '@/lib/utils/report-sync';
+import { connectToDatabase } from '@/lib/db/mongodb'; // Temporary for PlaygroundSettings
 
 // System prompt for financial report generation with AssetWorks branding
 const FINANCIAL_REPORT_PROMPT = `You are an expert financial analyst and data visualization specialist. Your role is to:
@@ -305,8 +304,6 @@ export async function POST(
       return new Response('Unauthorized', { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { threadId } = await params;
     const body = await request.json();
     const { content, model = 'claude-3-5-sonnet-20241022', provider = 'anthropic' } = body;
@@ -316,14 +313,18 @@ export async function POST(
     }
 
     // Verify thread access
-    const thread = await Thread.findById(threadId);
+    const thread = await prisma.threads.findUnique({
+      where: { id: threadId },
+    });
+
     if (!thread) {
       return new Response('Thread not found', { status: 404 });
     }
 
     const isOwner = thread.userId === session.user.id;
-    const hasEditAccess = thread.sharedWith.some(
-      (share) => share.userId === session.user.id && share.permission === 'edit'
+    const sharedWith = (thread.sharedWith as any[]) || [];
+    const hasEditAccess = sharedWith.some(
+      (share: any) => share.userId === session.user.id && share.permission === 'edit'
     );
 
     if (!isOwner && !hasEditAccess) {
@@ -331,18 +332,31 @@ export async function POST(
     }
 
     // Save user message
-    const userMessage = new Message({
-      threadId,
-      role: 'user',
-      content: content.trim(),
+    const userMessage = await prisma.messages.create({
+      data: {
+        id: randomUUID(),
+        threadId,
+        userId: session.user.id,
+        role: 'USER',
+        content: content.trim(),
+        metadata: {},
+        updatedAt: new Date(),
+      },
     });
-    await userMessage.save();
 
     // Update thread title if it's the first message
     if (thread.title === 'New Thread' || !thread.title) {
-      thread.title = content.substring(0, 100);
-      await thread.save();
+      await prisma.threads.update({
+        where: { id: threadId },
+        data: {
+          title: content.substring(0, 100),
+          updatedAt: new Date(),
+        },
+      });
     }
+
+    // Still need MongoDB for PlaygroundSettings (will migrate later)
+    await connectToDatabase();
 
     // Load user's playground settings
     let settings = await PlaygroundSettings.findOne({
@@ -399,10 +413,11 @@ export async function POST(
     }
 
     // Get conversation history
-    const previousMessages = await Message.find({ threadId })
-      .sort({ createdAt: 1 })
-      .limit(50)
-      .lean();
+    const previousMessages = await prisma.messages.findMany({
+      where: { threadId },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    });
 
     // Create streaming response
     const encoder = new TextEncoder();
@@ -475,21 +490,32 @@ export async function POST(
         const insights = extractInsights(accumulatedContent);
 
         // Create new report
-        const report = new PlaygroundReport({
-          threadId,
-          htmlContent: accumulatedContent,
-          sections,
-          insights,
-          metadata: {
-            generatedBy: session.user.email,
+        const report = await prisma.playground_reports.create({
+          data: {
+            id: randomUUID(),
+            threadId,
+            htmlContent: accumulatedContent,
+            sections: sections as any[],
+            insights: insights as any[],
+            isInteractiveMode: false,
+            generatedBy: session.user.email || session.user.id,
             model,
             provider,
             prompt: content,
             generationTime: duration,
+            metadata: {
+              generatedBy: session.user.email,
+              model,
+              provider,
+              prompt: content,
+              generationTime: duration,
+            },
+            totalTokens: usageData.inputTokens + usageData.outputTokens,
+            totalCost: 0, // Will be calculated by trackReportUsage
+            updatedAt: new Date(),
           },
         });
-        await report.save();
-        reportId = report._id.toString();
+        reportId = report.id;
 
         // Track usage if we have token data
         if (usageData.inputTokens > 0 || usageData.outputTokens > 0) {
@@ -503,9 +529,15 @@ export async function POST(
         }
 
         // Update thread with new report
-        thread.currentReportId = reportId;
-        thread.reportVersions.push(reportId);
-        await thread.save();
+        const currentReportVersions = thread.reportVersions || [];
+        await prisma.threads.update({
+          where: { id: threadId },
+          data: {
+            currentReportId: reportId,
+            reportVersions: [...currentReportVersions, reportId],
+            updatedAt: new Date(),
+          },
+        });
 
         // Generate a conversational summary for chat display
         const sectionCount = sections.length;
@@ -513,18 +545,22 @@ export async function POST(
         const chatSummary = generateChatSummary(sectionCount, insightCount, content);
 
         // Save assistant message with summary (not full HTML)
-        const assistantMessage = new Message({
-          threadId,
-          role: 'assistant',
-          content: chatSummary,
-          reportId: report._id.toString(),
-          metadata: {
-            model,
-            provider,
-            duration,
+        const assistantMessage = await prisma.messages.create({
+          data: {
+            id: randomUUID(),
+            threadId,
+            userId: session.user.id,
+            role: 'ASSISTANT',
+            content: chatSummary,
+            reportId: report.id,
+            metadata: {
+              model,
+              provider,
+              duration,
+            },
+            updatedAt: new Date(),
           },
         });
-        await assistantMessage.save();
 
         // Update context snapshot in background (non-blocking)
         ContextSnapshotService.createOrUpdateThreadSnapshot(
@@ -534,9 +570,9 @@ export async function POST(
           console.error('Failed to update thread snapshot:', error);
         });
 
-        // Sync report to Prisma and extract entities (non-blocking)
+        // Report already created in Prisma, just sync entities (non-blocking)
         syncReportToPrisma({
-          _id: report._id.toString(),
+          _id: report.id,
           threadId,
           htmlContent: accumulatedContent,
           metadata: {
@@ -546,13 +582,13 @@ export async function POST(
             provider,
           },
         }).catch((error) => {
-          console.error('Failed to sync report to Prisma:', error);
+          console.error('Failed to sync entities from report:', error);
         });
 
         // Send completion event
         const completeChunk = `data: ${JSON.stringify({
           type: 'complete',
-          reportId: report._id.toString(),
+          reportId: report.id,
           duration,
         })}\n\n`;
         await writer.write(encoder.encode(completeChunk));
@@ -689,28 +725,32 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { threadId } = await params;
 
     // Verify thread access
-    const thread = await Thread.findById(threadId);
+    const thread = await prisma.threads.findUnique({
+      where: { id: threadId },
+    });
+
     if (!thread) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
     const isOwner = thread.userId === session.user.id;
-    const hasAccess = thread.sharedWith.some(
-      (share) => share.userId === session.user.id
+    const sharedWith = (thread.sharedWith as any[]) || [];
+    const hasAccess = sharedWith.some(
+      (share: any) => share.userId === session.user.id
     );
 
     if (!isOwner && !hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const messages = await Message.find({ threadId })
-      .sort({ createdAt: 1 })
-      .limit(500);
+    const messages = await prisma.messages.findMany({
+      where: { threadId },
+      orderBy: { createdAt: 'asc' },
+      take: 500,
+    });
 
     return NextResponse.json({ messages }, { status: 200 });
   } catch (error) {
