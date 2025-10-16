@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import Template from '@/lib/db/models/Template';
+import { prisma } from '@/lib/db/prisma';
+import { randomUUID } from 'crypto';
 
 // GET /api/playground/templates - Get all public templates
 export async function GET(request: NextRequest) {
@@ -11,37 +11,46 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
     const tier = searchParams.get('tier');
     const search = searchParams.get('search');
 
-    // Build query
-    const query: any = {
-      $or: [
+    // Build where clause
+    const where: any = {
+      OR: [
         { isPublic: true }, // Public templates
         { userId: session.user.email }, // User's own templates
       ],
     };
 
     if (category) {
-      query.category = category;
+      where.category = category;
     }
 
     if (tier) {
-      query.tier = tier;
+      where.tier = tier.toUpperCase() as any; // Convert to enum
     }
 
     if (search) {
-      query.$text = { $search: search };
+      // Simple search on name and description
+      where.OR = [
+        ...where.OR,
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
     // Fetch templates with sorting
-    const templates = await Template.find(query)
-      .sort({ usageCount: -1, rating: -1, createdAt: -1 })
-      .limit(50);
+    const templates = await prisma.templates.findMany({
+      where,
+      orderBy: [
+        { usageCount: 'desc' },
+        { rating: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      take: 50,
+    });
 
     return NextResponse.json({ templates }, { status: 200 });
   } catch (error) {
@@ -60,8 +69,6 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    await connectToDatabase();
 
     const body = await request.json();
     const {
@@ -87,25 +94,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new template
-    const template = new Template({
-      userId: session.user.email,
-      name: name.trim(),
-      description: description?.trim(),
-      category: category?.trim(),
-      tags: tags || [],
-      structure,
-      basePrompt: basePrompt?.trim(),
-      isPublic: isPublic || false,
-      isPremium: isPremium || false,
-      tier: tier || 'free',
-      icon: icon?.trim(),
-      previewImageUrl: previewImageUrl?.trim(),
-      usageCount: 0,
-      rating: 0,
-      ratingCount: 0,
+    const template = await prisma.templates.create({
+      data: {
+        id: randomUUID(),
+        userId: session.user.email,
+        name: name.trim(),
+        description: description?.trim() || null,
+        category: category?.trim() || null,
+        tags: tags || [],
+        structure,
+        basePrompt: basePrompt?.trim() || null,
+        isPublic: isPublic || false,
+        isPremium: isPremium || false,
+        tier: tier ? tier.toUpperCase() : 'FREE', // Convert to enum
+        icon: icon?.trim() || null,
+        previewImageUrl: previewImageUrl?.trim() || null,
+        usageCount: 0,
+        rating: 0,
+        ratingCount: 0,
+        updatedAt: new Date(),
+      },
     });
-
-    await template.save();
 
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {

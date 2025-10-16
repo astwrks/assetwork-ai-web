@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import Template from '@/lib/db/models/Template';
+import { prisma } from '@/lib/db/prisma';
 
 // GET /api/playground/templates/[templateId] - Get template details
 export async function GET(
@@ -14,10 +13,10 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { templateId } = await params;
-    const template = await Template.findById(templateId);
+    const template = await prisma.templates.findUnique({
+      where: { id: templateId },
+    });
 
     if (!template) {
       return NextResponse.json(
@@ -58,10 +57,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { templateId } = await params;
-    const template = await Template.findById(templateId);
+    const template = await prisma.templates.findUnique({
+      where: { id: templateId },
+    });
 
     if (!template) {
       return NextResponse.json(
@@ -79,30 +78,27 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const updates = {
-      name: body.name,
-      description: body.description,
-      category: body.category,
-      tags: body.tags,
-      structure: body.structure,
-      basePrompt: body.basePrompt,
-      isPublic: body.isPublic,
-      isPremium: body.isPremium,
-      tier: body.tier,
-      icon: body.icon,
-      previewImageUrl: body.previewImageUrl,
+    const updateData: any = {
+      updatedAt: new Date(),
     };
 
-    // Remove undefined values
-    Object.keys(updates).forEach(
-      (key) => updates[key as keyof typeof updates] === undefined && delete updates[key as keyof typeof updates]
-    );
+    // Add fields if provided
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.category !== undefined) updateData.category = body.category;
+    if (body.tags !== undefined) updateData.tags = body.tags;
+    if (body.structure !== undefined) updateData.structure = body.structure;
+    if (body.basePrompt !== undefined) updateData.basePrompt = body.basePrompt;
+    if (body.isPublic !== undefined) updateData.isPublic = body.isPublic;
+    if (body.isPremium !== undefined) updateData.isPremium = body.isPremium;
+    if (body.tier !== undefined) updateData.tier = body.tier.toUpperCase();
+    if (body.icon !== undefined) updateData.icon = body.icon;
+    if (body.previewImageUrl !== undefined) updateData.previewImageUrl = body.previewImageUrl;
 
-    const updatedTemplate = await Template.findByIdAndUpdate(
-      templateId,
-      { $set: updates },
-      { new: true, runValidators: true }
-    );
+    const updatedTemplate = await prisma.templates.update({
+      where: { id: templateId },
+      data: updateData,
+    });
 
     return NextResponse.json({ template: updatedTemplate }, { status: 200 });
   } catch (error) {
@@ -125,10 +121,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { templateId } = await params;
-    const template = await Template.findById(templateId);
+    const template = await prisma.templates.findUnique({
+      where: { id: templateId },
+    });
 
     if (!template) {
       return NextResponse.json(
@@ -145,7 +141,9 @@ export async function DELETE(
       );
     }
 
-    await Template.findByIdAndDelete(templateId);
+    await prisma.templates.delete({
+      where: { id: templateId },
+    });
 
     return NextResponse.json(
       { message: 'Template deleted successfully' },

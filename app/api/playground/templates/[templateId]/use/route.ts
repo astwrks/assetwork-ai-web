@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import Template from '@/lib/db/models/Template';
-import Thread from '@/lib/db/models/Thread';
+import { prisma } from '@/lib/db/prisma';
+import { randomUUID } from 'crypto';
 
 // POST /api/playground/templates/[templateId]/use - Create a thread from template
 export async function POST(
@@ -16,10 +15,10 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     // Find the template
-    const template = await Template.findById(templateId);
+    const template = await prisma.templates.findUnique({
+      where: { id: templateId },
+    });
 
     if (!template) {
       return NextResponse.json(
@@ -57,30 +56,34 @@ export async function POST(
     const { customTitle } = body;
 
     // Create new thread from template
-    const thread = new Thread({
-      userId: session.user.email,
-      title: customTitle || `${template.name} - ${new Date().toLocaleDateString()}`,
-      description: template.description || 'Report created from template',
-      status: 'active',
-      isTemplate: false, // The thread is not a template, just created from one
-      templateName: template.name,
-      templateDescription: template.description,
-      reportVersions: [],
-      sharedWith: [],
-      metadata: {
-        sourceTemplateId: template._id.toString(),
-        templateStructure: template.structure,
-        basePrompt: template.basePrompt,
+    const thread = await prisma.threads.create({
+      data: {
+        id: randomUUID(),
+        userId: session.user.email,
+        title: customTitle || `${template.name} - ${new Date().toLocaleDateString()}`,
+        description: template.description || 'Report created from template',
+        status: 'ACTIVE',
+        isTemplate: false, // The thread is not a template, just created from one
+        templateName: template.name,
+        templateDescription: template.description,
+        reportVersions: [],
+        sharedWith: [],
+        metadata: {
+          sourceTemplateId: templateId,
+          templateStructure: template.structure,
+          basePrompt: template.basePrompt,
+        },
+        updatedAt: new Date(),
       },
     });
 
-    await thread.save();
-
     // Increment template usage count
-    await Template.findByIdAndUpdate(
-      templateId,
-      { $inc: { usageCount: 1 } }
-    );
+    await prisma.templates.update({
+      where: { id: templateId },
+      data: {
+        usageCount: { increment: 1 },
+      },
+    });
 
     console.log(`✅ Thread created from template: ${template.name}`);
 
