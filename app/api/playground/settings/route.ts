@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
+import { prisma } from '@/lib/db/prisma';
+import { randomUUID } from 'crypto';
 
 // GET /api/playground/settings - Get settings for current user
 export async function GET(request: NextRequest) {
@@ -11,29 +11,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     // Try to find user-specific settings first
-    let settings = await PlaygroundSettings.findOne({
-      userId: session.user.email,
-      isGlobal: false,
+    let settings = await prisma.playground_settings.findFirst({
+      where: {
+        userId: session.user.email,
+      },
     });
-
-    // If no user settings, try to find organization settings
-    if (!settings) {
-      settings = await PlaygroundSettings.findOne({
-        isGlobal: true,
-      });
-    }
 
     // If still no settings, create default settings for user
     if (!settings) {
-      settings = new PlaygroundSettings({
-        userId: session.user.email,
-        isGlobal: false,
-        lastModifiedBy: session.user.email,
+      settings = await prisma.playground_settings.create({
+        data: {
+          id: randomUUID(),
+          userId: session.user.email,
+          settings: {},
+          updatedAt: new Date(),
+        },
       });
-      await settings.save();
     }
 
     return NextResponse.json({ settings }, { status: 200 });
@@ -54,14 +48,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const body = await request.json();
 
     // Check if settings already exist
-    const existingSettings = await PlaygroundSettings.findOne({
-      userId: session.user.email,
-      isGlobal: body.isGlobal || false,
+    const existingSettings = await prisma.playground_settings.findFirst({
+      where: {
+        userId: session.user.email,
+      },
     });
 
     if (existingSettings) {
@@ -71,13 +64,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const settings = new PlaygroundSettings({
-      ...body,
-      userId: session.user.email,
-      lastModifiedBy: session.user.email,
+    const settings = await prisma.playground_settings.create({
+      data: {
+        id: randomUUID(),
+        userId: session.user.email,
+        defaultModel: body.defaultModel || null,
+        defaultProvider: body.defaultProvider || null,
+        autoSave: body.autoSave !== undefined ? body.autoSave : true,
+        settings: body.settings || {},
+        updatedAt: new Date(),
+      },
     });
-
-    await settings.save();
 
     return NextResponse.json({ settings }, { status: 201 });
   } catch (error) {
@@ -97,53 +94,59 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const body = await request.json();
 
     // Find user's settings
-    let settings = await PlaygroundSettings.findOne({
-      userId: session.user.email,
-      isGlobal: false,
+    let settings = await prisma.playground_settings.findFirst({
+      where: {
+        userId: session.user.email,
+      },
     });
 
     if (!settings) {
-      // Create new settings if they don't exist
-      settings = new PlaygroundSettings({
-        userId: session.user.email,
-        isGlobal: false,
-        lastModifiedBy: session.user.email,
+      // Create new settings if they don't exist (upsert behavior)
+      settings = await prisma.playground_settings.create({
+        data: {
+          id: randomUUID(),
+          userId: session.user.email,
+          defaultModel: body.defaultModel || null,
+          defaultProvider: body.defaultProvider || null,
+          autoSave: body.autoSave !== undefined ? body.autoSave : true,
+          settings: body.settings || {},
+          updatedAt: new Date(),
+        },
+      });
+    } else {
+      // Update existing settings
+      const updateData: any = {
+        updatedAt: new Date(),
+      };
+
+      if (body.defaultModel !== undefined) {
+        updateData.defaultModel = body.defaultModel;
+      }
+
+      if (body.defaultProvider !== undefined) {
+        updateData.defaultProvider = body.defaultProvider;
+      }
+
+      if (body.autoSave !== undefined) {
+        updateData.autoSave = body.autoSave;
+      }
+
+      if (body.settings !== undefined) {
+        // Merge settings if it's an object
+        updateData.settings = {
+          ...(settings.settings as any),
+          ...body.settings,
+        };
+      }
+
+      settings = await prisma.playground_settings.update({
+        where: { id: settings.id },
+        data: updateData,
       });
     }
-
-    // Update allowed fields
-    const allowedUpdates = [
-      'systemPrompt',
-      'systemPrompts',
-      'activeSystemPromptId',
-      'providers',
-      'defaultProvider',
-      'defaultModel',
-      'defaultTemperature',
-      'defaultMaxTokens',
-      'defaultTopP',
-      'allowCustomPrompts',
-      'allowProviderSelection',
-      'allowModelSelection',
-      'allowParameterOverride',
-      'brandColors',
-    ];
-
-    Object.keys(body).forEach((key) => {
-      if (allowedUpdates.includes(key)) {
-        (settings as any)[key] = body[key];
-      }
-    });
-
-    settings.lastModifiedBy = session.user.email;
-    settings.systemPromptVersion += 1;
-
-    await settings.save();
 
     return NextResponse.json({ settings }, { status: 200 });
   } catch (error) {
