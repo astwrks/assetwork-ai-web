@@ -35,6 +35,7 @@ export default function AISummaryDashboard() {
   const [marketInsights, setMarketInsights] = useState<MarketInsight[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [latestThreadId, setLatestThreadId] = useState<string | null>(null);
 
   // Fetch dashboard data
   const fetchDashboardData = async (refresh = false) => {
@@ -65,8 +66,26 @@ export default function AISummaryDashboard() {
     }
   };
 
+  // Fetch latest thread
+  const fetchLatestThread = async () => {
+    try {
+      const response = await fetch('/api/playground/threads');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.threads && data.threads.length > 0) {
+          // Threads are sorted by updatedAt desc, so first one is latest
+          const latestThread = data.threads[0];
+          setLatestThreadId(latestThread.id || latestThread._id);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching threads:', error);
+    }
+  };
+
   useEffect(() => {
     fetchDashboardData();
+    fetchLatestThread();
   }, [timeRange]);
 
   // Handle clicking an insight card to start a new thread
@@ -83,8 +102,12 @@ export default function AISummaryDashboard() {
       });
 
       if (response.ok) {
-        const { threadId } = await response.json();
-        router.push(`/financial-playground?threadId=${threadId}`);
+        const data = await response.json();
+        const threadId = data.thread?.id || data.thread?._id;
+        if (threadId) {
+          // Open in new tab
+          window.open(`/financial-playground?thread=${threadId}`, '_blank');
+        }
       }
     } catch (error) {
       console.error('Error creating thread:', error);
@@ -92,8 +115,47 @@ export default function AISummaryDashboard() {
   };
 
   // Handle creating a blank new thread
-  const handleNewChat = () => {
-    router.push('/financial-playground');
+  const handleNewChat = async () => {
+    try {
+      // Create a new thread first
+      const response = await fetch('/api/playground/threads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'New Financial Report',
+          description: 'Generated report',
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const threadId = data.thread?.id || data.thread?._id;
+        if (threadId) {
+          // Open the new thread in a new tab
+          window.open(`/financial-playground?thread=${threadId}`, '_blank');
+        } else {
+          // Fallback to plain URL if thread ID is missing
+          window.open('/financial-playground', '_blank');
+        }
+      } else {
+        console.error('Failed to create thread');
+        window.open('/financial-playground', '_blank');
+      }
+    } catch (error) {
+      console.error('Error creating thread:', error);
+      window.open('/financial-playground', '_blank');
+    }
+  };
+
+  // Handle navigating to all chats with latest thread open
+  const handleAllChats = () => {
+    if (latestThreadId) {
+      // Navigate to playground with latest thread
+      router.push(`/financial-playground?thread=${latestThreadId}`);
+    } else {
+      // No threads yet, just go to playground
+      router.push('/financial-playground');
+    }
   };
 
   if (loading) {
@@ -123,13 +185,22 @@ export default function AISummaryDashboard() {
               </p>
             </div>
 
-            <button
-              onClick={handleNewChat}
-              className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium shadow-lg"
-            >
-              <Plus className="w-5 h-5" />
-              New Chat
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleAllChats}
+                className="flex items-center gap-2 px-5 py-3 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors font-medium border border-border"
+              >
+                <MessageSquare className="w-5 h-5" />
+                All Chats
+              </button>
+              <button
+                onClick={handleNewChat}
+                className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium shadow-lg"
+              >
+                <Plus className="w-5 h-5" />
+                New Chat
+              </button>
+            </div>
           </div>
 
           {/* Time Range Selector */}

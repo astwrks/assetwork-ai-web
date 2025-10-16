@@ -4,6 +4,48 @@ import { authOptions } from '@/lib/auth/auth-options';
 import { prisma } from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
 
+// Default settings structure with enabled providers
+const DEFAULT_SETTINGS = {
+  providers: [
+    {
+      id: 'anthropic',
+      name: 'Anthropic',
+      enabled: true,
+      models: [
+        {
+          id: 'claude-3-5-sonnet-20241022',
+          name: 'Claude 3.5 Sonnet',
+          enabled: true,
+          maxTokens: 8192,
+          temperature: 0.7,
+        },
+      ],
+    },
+    {
+      id: 'openai',
+      name: 'OpenAI',
+      enabled: false,
+      models: [
+        {
+          id: 'gpt-4-turbo-preview',
+          name: 'GPT-4 Turbo',
+          enabled: false,
+          maxTokens: 4096,
+          temperature: 0.7,
+        },
+      ],
+    },
+  ],
+  systemPrompts: [
+    {
+      id: 'web-report',
+      name: 'Web Report Mode',
+      description: 'Generate comprehensive HTML financial reports',
+    },
+  ],
+  activeSystemPromptId: 'web-report',
+};
+
 // GET /api/playground/settings - Get settings for current user
 export async function GET(request: NextRequest) {
   try {
@@ -25,7 +67,7 @@ export async function GET(request: NextRequest) {
         data: {
           id: randomUUID(),
           userId: session.user.id,
-          settings: {},
+          settings: DEFAULT_SETTINGS,
           updatedAt: new Date(),
         },
       });
@@ -72,7 +114,7 @@ export async function POST(request: NextRequest) {
         defaultModel: body.defaultModel || null,
         defaultProvider: body.defaultProvider || null,
         autoSave: body.autoSave !== undefined ? body.autoSave : true,
-        settings: body.settings || {},
+        settings: body.settings || DEFAULT_SETTINGS,
         updatedAt: new Date(),
       },
     });
@@ -113,7 +155,7 @@ export async function PATCH(request: NextRequest) {
           defaultModel: body.defaultModel || null,
           defaultProvider: body.defaultProvider || null,
           autoSave: body.autoSave !== undefined ? body.autoSave : true,
-          settings: body.settings || {},
+          settings: body.settings || DEFAULT_SETTINGS,
           updatedAt: new Date(),
         },
       });

@@ -47,7 +47,7 @@ const SectionVersionSchema = new Schema<SectionVersion>(
 
 const ReportSectionSchema = new Schema<ReportSectionDocument>(
   {
-    reportId: { type: String, required: true },
+    reportId: { type: String, required: true, index: false }, // Disable auto-indexing
     type: {
       type: String,
       enum: ['metric', 'chart', 'table', 'text', 'insight', 'custom'],
@@ -77,10 +77,11 @@ const ReportSectionSchema = new Schema<ReportSectionDocument>(
   },
   {
     timestamps: true,
+    autoIndex: true, // Keep compound indexes but prevent duplicate single-field indexes
   }
 );
 
-// Indexes for efficient queries
+// Compound indexes for efficient queries (these include reportId, so no need for single-field index)
 ReportSectionSchema.index({ reportId: 1, order: 1 });
 ReportSectionSchema.index({ reportId: 1, type: 1 });
 
