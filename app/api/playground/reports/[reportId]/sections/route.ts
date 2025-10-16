@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
-import ReportSection from '@/lib/db/models/ReportSection';
-import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
+import { prisma } from '@/lib/db/prisma';
+import { randomUUID } from 'crypto';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
 import { trackReportUsage } from '@/lib/ai/usage-tracker';
@@ -20,20 +18,22 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { reportId } = await params;
 
     // Find the report and verify access
-    const report = await PlaygroundReport.findById(reportId);
+    const report = await prisma.playground_reports.findUnique({
+      where: { id: reportId },
+    });
+
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
     // Get all sections for this report, ordered
-    const sections = await ReportSection.find({ reportId })
-      .sort({ order: 1 })
-      .lean();
+    const sections = await prisma.report_sections.findMany({
+      where: { reportId },
+      orderBy: { order: 'asc' },
+    });
 
     return NextResponse.json({ sections }, { status: 200 });
   } catch (error) {
@@ -56,8 +56,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { reportId } = await params;
     const body = await request.json();
     const {
@@ -76,42 +74,44 @@ export async function POST(
     }
 
     // Find the report
-    const report = await PlaygroundReport.findById(reportId);
+    const report = await prisma.playground_reports.findUnique({
+      where: { id: reportId },
+    });
+
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
     // Load user settings for system prompt and model config
-    let settings = await PlaygroundSettings.findOne({
-      userId: session.user.email,
-      isGlobal: false,
+    let settings = await prisma.playground_settings.findFirst({
+      where: {
+        userId: session.user.email,
+      },
     });
 
-    if (!settings) {
-      settings = await PlaygroundSettings.findOne({ isGlobal: true });
-    }
-
     // Get ALL sections for comprehensive context
-    const allSections = await ReportSection.find({ reportId })
-      .sort({ order: 1 })
-      .lean();
+    const allSections = await prisma.report_sections.findMany({
+      where: { reportId },
+      orderBy: { order: 'asc' },
+    });
 
     // Get conversation history from thread if available
     let conversationContext = '';
     if (report.threadId) {
-      const Thread = (await import('@/lib/db/models/Thread')).default;
-      const thread = await Thread.findById(report.threadId);
+      const thread = await prisma.threads.findUnique({
+        where: { id: report.threadId },
+      });
 
       if (thread) {
-        const Message = (await import('@/lib/db/models/Message')).default;
-        const messages = await Message.find({ threadId: thread._id })
-          .sort({ createdAt: 1 })
-          .limit(10)
-          .lean();
+        const messages = await prisma.messages.findMany({
+          where: { threadId: report.threadId },
+          orderBy: { createdAt: 'asc' },
+          take: 10,
+        });
 
         if (messages.length > 0) {
           conversationContext = '\n\nConversation History:\n' + messages
-            .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.substring(0, 200)}${m.content.length > 200 ? '...' : ''}`)
+            .map(m => `${m.role === 'USER' ? 'User' : 'Assistant'}: ${m.content.substring(0, 200)}${m.content.length > 200 ? '...' : ''}`)
             .join('\n');
         }
       }
@@ -340,16 +340,24 @@ Generate a professional, visually stunning section now:`;
 
         // Update order of existing sections if inserting in middle
         if (position !== undefined && position >= 0) {
-          await ReportSection.updateMany(
-            { reportId, order: { $gte: position } },
-            { $inc: { order: 1 } }
-          );
+          await prisma.report_sections.updateMany({
+            where: {
+              reportId,
+              order: { gte: position },
+            },
+            data: {
+              order: { increment: 1 },
+            },
+          });
         }
 
         // Determine order
-        const maxOrderSection = await ReportSection.findOne({ reportId })
-          .sort({ order: -1 })
-          .limit(1);
+        const maxOrderSection = await prisma.report_sections.findFirst({
+          where: { reportId },
+          orderBy: { order: 'desc' },
+          take: 1,
+        });
+
         const order =
           position !== undefined && position >= 0
             ? position
@@ -358,23 +366,25 @@ Generate a professional, visually stunning section now:`;
             : 0;
 
         // Create new section
-        const newSection = new ReportSection({
-          reportId,
-          type,
-          title,
-          htmlContent: accumulatedContent,
-          order,
-          version: 1,
-          editHistory: [],
-          metadata: {
-            originallyGeneratedBy: session.user.email,
-            lastModifiedBy: session.user.email,
-            model,
-            originalPrompt: prompt,
+        const newSection = await prisma.report_sections.create({
+          data: {
+            id: randomUUID(),
+            reportId,
+            type: type.toUpperCase() as any, // Convert to enum if needed
+            title,
+            htmlContent: accumulatedContent,
+            order,
+            version: 1,
+            editHistory: [],
+            metadata: {
+              originallyGeneratedBy: session.user.email,
+              lastModifiedBy: session.user.email,
+              model,
+              originalPrompt: prompt,
+            },
+            updatedAt: new Date(),
           },
         });
-
-        await newSection.save();
 
         // Track usage
         if (usageData.inputTokens > 0 || usageData.outputTokens > 0) {
@@ -388,11 +398,25 @@ Generate a professional, visually stunning section now:`;
         }
 
         // Update report to enable interactive mode
-        report.isInteractiveMode = true;
-        if (!report.sectionRefs.includes(newSection._id.toString())) {
-          report.sectionRefs.push(newSection._id.toString());
+        const currentSectionRefs = (report.sectionRefs as string[]) || [];
+        if (!currentSectionRefs.includes(newSection.id)) {
+          await prisma.playground_reports.update({
+            where: { id: reportId },
+            data: {
+              isInteractiveMode: true,
+              sectionRefs: [...currentSectionRefs, newSection.id],
+              updatedAt: new Date(),
+            },
+          });
+        } else {
+          await prisma.playground_reports.update({
+            where: { id: reportId },
+            data: {
+              isInteractiveMode: true,
+              updatedAt: new Date(),
+            },
+          });
         }
-        await report.save();
 
         // Update context snapshot in background (non-blocking)
         ContextSnapshotService.createOrUpdateReportSnapshot(
@@ -403,13 +427,24 @@ Generate a professional, visually stunning section now:`;
         });
 
         // Get updated usage data for immediate client update
-        const updatedReport = await PlaygroundReport.findById(reportId).select('usage').lean();
+        const updatedReport = await prisma.playground_reports.findUnique({
+          where: { id: reportId },
+          select: {
+            totalTokens: true,
+            totalCost: true,
+            operations: true,
+          },
+        });
 
         // Send completion event with updated usage
         const completeChunk = `data: ${JSON.stringify({
           type: 'complete',
           section: newSection,
-          usage: updatedReport?.usage || null, // Include usage in completion event
+          usage: updatedReport ? {
+            totalTokens: updatedReport.totalTokens || 0,
+            totalCost: updatedReport.totalCost || 0,
+            operations: updatedReport.operations || [],
+          } : null,
         })}\n\n`;
         await writer.write(encoder.encode(completeChunk));
         await writer.close();

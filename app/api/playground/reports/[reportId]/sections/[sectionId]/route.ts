@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
-import ReportSection from '@/lib/db/models/ReportSection';
-import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
+import { prisma } from '@/lib/db/prisma';
+import { randomUUID } from 'crypto';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
 import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
@@ -19,13 +17,13 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { reportId, sectionId } = await params;
 
-    const section = await ReportSection.findOne({
-      _id: sectionId,
-      reportId,
+    const section = await prisma.report_sections.findFirst({
+      where: {
+        id: sectionId,
+        reportId,
+      },
     });
 
     if (!section) {
@@ -53,8 +51,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { reportId, sectionId } = await params;
     const body = await request.json();
     const {
@@ -67,9 +63,11 @@ export async function PATCH(
       provider = 'anthropic',
     } = body;
 
-    const section = await ReportSection.findOne({
-      _id: sectionId,
-      reportId,
+    const section = await prisma.report_sections.findFirst({
+      where: {
+        id: sectionId,
+        reportId,
+      },
     });
 
     if (!section) {
@@ -83,17 +81,32 @@ export async function PATCH(
       const targetOrder = currentOrder + direction;
 
       // Find section to swap with
-      const swapSection = await ReportSection.findOne({
-        reportId,
-        order: targetOrder,
+      const swapSection = await prisma.report_sections.findFirst({
+        where: {
+          reportId,
+          order: targetOrder,
+        },
       });
 
       if (swapSection) {
-        // Swap orders
-        section.order = targetOrder;
-        swapSection.order = currentOrder;
-        await section.save();
-        await swapSection.save();
+        // Swap orders using transactions to ensure atomicity
+        await prisma.$transaction([
+          prisma.report_sections.update({
+            where: { id: sectionId },
+            data: { order: targetOrder, updatedAt: new Date() },
+          }),
+          prisma.report_sections.update({
+            where: { id: swapSection.id },
+            data: { order: currentOrder, updatedAt: new Date() },
+          }),
+        ]);
+
+        // Fetch updated section
+        const updatedSection = await prisma.report_sections.findUnique({
+          where: { id: sectionId },
+        });
+
+        return NextResponse.json({ section: updatedSection }, { status: 200 });
       }
 
       return NextResponse.json({ section }, { status: 200 });
@@ -101,33 +114,46 @@ export async function PATCH(
 
     // Handle duplicate action
     if (action === 'duplicate') {
-      const maxOrderSection = await ReportSection.findOne({ reportId })
-        .sort({ order: -1 })
-        .limit(1);
+      const maxOrderSection = await prisma.report_sections.findFirst({
+        where: { reportId },
+        orderBy: { order: 'desc' },
+        take: 1,
+      });
 
-      const newSection = new ReportSection({
-        reportId,
-        type: section.type,
-        title: `${section.title} (Copy)`,
-        htmlContent: section.htmlContent,
-        order: maxOrderSection ? maxOrderSection.order + 1 : 0,
-        version: 1,
-        editHistory: [],
-        metadata: {
-          originallyGeneratedBy: session.user.email,
-          lastModifiedBy: session.user.email,
-          model: section.metadata.model,
-          originalPrompt: `Duplicate of: ${section.title}`,
+      const newSection = await prisma.report_sections.create({
+        data: {
+          id: randomUUID(),
+          reportId,
+          type: section.type,
+          title: `${section.title} (Copy)`,
+          htmlContent: section.htmlContent,
+          order: maxOrderSection ? maxOrderSection.order + 1 : 0,
+          version: 1,
+          editHistory: [],
+          metadata: {
+            originallyGeneratedBy: session.user.email,
+            lastModifiedBy: session.user.email,
+            model: (section.metadata as any)?.model,
+            originalPrompt: `Duplicate of: ${section.title}`,
+          },
+          updatedAt: new Date(),
         },
       });
 
-      await newSection.save();
-
       // Update report section refs
-      const report = await PlaygroundReport.findById(reportId);
+      const report = await prisma.playground_reports.findUnique({
+        where: { id: reportId },
+      });
+
       if (report) {
-        report.sectionRefs.push(newSection._id.toString());
-        await report.save();
+        const currentSectionRefs = (report.sectionRefs as string[]) || [];
+        await prisma.playground_reports.update({
+          where: { id: reportId },
+          data: {
+            sectionRefs: [...currentSectionRefs, newSection.id],
+            updatedAt: new Date(),
+          },
+        });
       }
 
       // Update context snapshot in background (non-blocking)
@@ -144,14 +170,11 @@ export async function PATCH(
     // Handle AI edit with streaming
     if (prompt) {
       // Load settings
-      let settings = await PlaygroundSettings.findOne({
-        userId: session.user.email,
-        isGlobal: false,
+      let settings = await prisma.playground_settings.findFirst({
+        where: {
+          userId: session.user.email,
+        },
       });
-
-      if (!settings) {
-        settings = await PlaygroundSettings.findOne({ isGlobal: true });
-      }
 
       const editPrompt = `You are editing a section of a financial report.
 
@@ -205,11 +228,29 @@ Return only the HTML content, no explanations.`;
           }
 
           // Save new version
-          await section.saveVersion(
-            accumulatedContent,
-            session.user.email!,
-            prompt
-          );
+          const currentEditHistory = (section.editHistory as any[]) || [];
+          await prisma.report_sections.update({
+            where: { id: sectionId },
+            data: {
+              htmlContent: accumulatedContent,
+              version: section.version + 1,
+              editHistory: [
+                ...currentEditHistory,
+                {
+                  version: section.version + 1,
+                  htmlContent: accumulatedContent,
+                  editedBy: session.user.email,
+                  editedAt: new Date(),
+                  editPrompt: prompt,
+                },
+              ],
+              metadata: {
+                ...(section.metadata as any),
+                lastModifiedBy: session.user.email,
+              },
+              updatedAt: new Date(),
+            },
+          });
 
           // Update context snapshot in background (non-blocking)
           ContextSnapshotService.createOrUpdateReportSnapshot(
@@ -219,10 +260,15 @@ Return only the HTML content, no explanations.`;
             console.error('Failed to update report snapshot:', error);
           });
 
+          // Fetch updated section
+          const updatedSection = await prisma.report_sections.findUnique({
+            where: { id: sectionId },
+          });
+
           // Send completion event
           const completeChunk = `data: ${JSON.stringify({
             type: 'complete',
-            section: section,
+            section: updatedSection,
           })}\n\n`;
           await writer.write(encoder.encode(completeChunk));
           await writer.close();
@@ -247,20 +293,41 @@ Return only the HTML content, no explanations.`;
     }
 
     // Handle manual updates
+    const updateData: any = {
+      updatedAt: new Date(),
+      metadata: {
+        ...(section.metadata as any),
+        lastModifiedBy: session.user.email,
+      },
+    };
+
     if (htmlContent !== undefined) {
-      await section.saveVersion(htmlContent, session.user.email!);
+      const currentEditHistory = (section.editHistory as any[]) || [];
+      updateData.htmlContent = htmlContent;
+      updateData.version = section.version + 1;
+      updateData.editHistory = [
+        ...currentEditHistory,
+        {
+          version: section.version + 1,
+          htmlContent,
+          editedBy: session.user.email,
+          editedAt: new Date(),
+        },
+      ];
     }
 
     if (title !== undefined) {
-      section.title = title;
+      updateData.title = title;
     }
 
     if (order !== undefined) {
-      section.order = order;
+      updateData.order = order;
     }
 
-    section.metadata.lastModifiedBy = session.user.email!;
-    await section.save();
+    const updatedSection = await prisma.report_sections.update({
+      where: { id: sectionId },
+      data: updateData,
+    });
 
     // Update context snapshot in background (non-blocking)
     ContextSnapshotService.createOrUpdateReportSnapshot(
@@ -270,7 +337,7 @@ Return only the HTML content, no explanations.`;
       console.error('Failed to update report snapshot:', error);
     });
 
-    return NextResponse.json({ section }, { status: 200 });
+    return NextResponse.json({ section: updatedSection }, { status: 200 });
   } catch (error) {
     console.error('Error updating section:', error);
     return NextResponse.json(
@@ -291,13 +358,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { reportId, sectionId } = await params;
 
-    const section = await ReportSection.findOne({
-      _id: sectionId,
-      reportId,
+    const section = await prisma.report_sections.findFirst({
+      where: {
+        id: sectionId,
+        reportId,
+      },
     });
 
     if (!section) {
@@ -307,21 +374,36 @@ export async function DELETE(
     const deletedOrder = section.order;
 
     // Delete the section
-    await ReportSection.deleteOne({ _id: sectionId });
+    await prisma.report_sections.delete({
+      where: { id: sectionId },
+    });
 
     // Update order of sections after deleted one
-    await ReportSection.updateMany(
-      { reportId, order: { $gt: deletedOrder } },
-      { $inc: { order: -1 } }
-    );
+    await prisma.report_sections.updateMany({
+      where: {
+        reportId,
+        order: { gt: deletedOrder },
+      },
+      data: {
+        order: { decrement: 1 },
+        updatedAt: new Date(),
+      },
+    });
 
     // Update report section refs
-    const report = await PlaygroundReport.findById(reportId);
+    const report = await prisma.playground_reports.findUnique({
+      where: { id: reportId },
+    });
+
     if (report) {
-      report.sectionRefs = report.sectionRefs.filter(
-        (ref) => ref !== sectionId
-      );
-      await report.save();
+      const currentSectionRefs = (report.sectionRefs as string[]) || [];
+      await prisma.playground_reports.update({
+        where: { id: reportId },
+        data: {
+          sectionRefs: currentSectionRefs.filter((ref) => ref !== sectionId),
+          updatedAt: new Date(),
+        },
+      });
     }
 
     // Update context snapshot in background (non-blocking)

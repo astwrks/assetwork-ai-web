@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import PlaygroundReport from '@/lib/db/models/PlaygroundReport';
-import Thread from '@/lib/db/models/Thread';
+import { prisma } from '@/lib/db/prisma';
 
 // GET /api/playground/reports/:reportId - Fetch a specific report
 export async function GET(
@@ -15,28 +13,33 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await connectToDatabase();
-
     const { reportId } = await params;
 
-    // Fetch the report
-    const report = await PlaygroundReport.findById(reportId);
+    // Fetch the report with thread for access control
+    const report = await prisma.playground_reports.findUnique({
+      where: { id: reportId },
+      include: {
+        threads: true,
+      },
+    });
+
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
-    // Verify access through the thread
-    const thread = await Thread.findById(report.threadId);
-    if (!thread) {
+    if (!report.threads) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
     // Check access using both email and id for compatibility
     const userIdentifier = session.user.email || session.user.id;
+    const thread = report.threads;
     const isOwner = thread.userId === userIdentifier ||
                     thread.userId === session.user.id ||
                     thread.userId === session.user.email;
-    const hasAccess = thread.sharedWith.some(
+
+    const sharedWith = (thread.sharedWith as any[]) || [];
+    const hasAccess = sharedWith.some(
       (share: any) => share.userId === userIdentifier ||
                       share.userId === session.user.id ||
                       share.userId === session.user.email
@@ -46,7 +49,10 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    return NextResponse.json({ report }, { status: 200 });
+    // Remove threads from response to keep it clean
+    const { threads: _, ...reportData } = report;
+
+    return NextResponse.json({ report: reportData }, { status: 200 });
   } catch (error) {
     console.error('Error fetching report:', error);
     return NextResponse.json(
