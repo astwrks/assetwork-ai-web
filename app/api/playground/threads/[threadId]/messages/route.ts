@@ -3,13 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
 import { prisma } from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
-import PlaygroundSettings from '@/lib/db/models/PlaygroundSettings';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
 import { trackReportUsage } from '@/lib/ai/usage-tracker';
 import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
 import { syncReportToPrisma } from '@/lib/utils/report-sync';
-import { connectToDatabase } from '@/lib/db/mongodb'; // Temporary for PlaygroundSettings
 
 // System prompt for financial report generation with AssetWorks branding
 const FINANCIAL_REPORT_PROMPT = `You are an expert financial analyst and data visualization specialist. Your role is to:
@@ -355,58 +353,58 @@ export async function POST(
       });
     }
 
-    // Still need MongoDB for PlaygroundSettings (will migrate later)
-    await connectToDatabase();
-
     // Load user's playground settings
-    let settings = await PlaygroundSettings.findOne({
-      userId: session.user.email,
-      isGlobal: false,
+    let settings = await prisma.playground_settings.findFirst({
+      where: { userId: session.user.email },
     });
 
-    // If no user settings, try global settings
+    // If no settings, create default
     if (!settings) {
-      settings = await PlaygroundSettings.findOne({ isGlobal: true });
+      settings = await prisma.playground_settings.create({
+        data: {
+          id: randomUUID(),
+          userId: session.user.email,
+          defaultModel: null,
+          defaultProvider: null,
+          autoSave: true,
+          settings: {}, // Empty JSON object for default settings
+          updatedAt: new Date(),
+        },
+      });
     }
 
-    // If still no settings, create default
-    if (!settings) {
-      settings = new PlaygroundSettings({
-        userId: session.user.email,
-        isGlobal: false,
-        lastModifiedBy: session.user.email,
-      });
-      await settings.save();
-    }
+    // Extract settings from JSON field
+    const settingsData = (settings.settings as any) || {};
 
     // Select system prompt based on activeSystemPromptId
     let systemPrompt = FINANCIAL_REPORT_PROMPT;
 
-    if (settings.systemPrompts && settings.systemPrompts.length > 0 && settings.activeSystemPromptId) {
-      const activePrompt = settings.systemPrompts.find(
-        (p) => p.id === settings.activeSystemPromptId
+    if (settingsData.systemPrompts && settingsData.systemPrompts.length > 0 && settingsData.activeSystemPromptId) {
+      const activePrompt = settingsData.systemPrompts.find(
+        (p: any) => p.id === settingsData.activeSystemPromptId
       );
       if (activePrompt) {
         systemPrompt = activePrompt.content;
       } else {
         // Fallback to legacy systemPrompt field if active prompt not found
-        systemPrompt = settings.systemPrompt || FINANCIAL_REPORT_PROMPT;
+        systemPrompt = settingsData.systemPrompt || FINANCIAL_REPORT_PROMPT;
       }
     } else {
       // Fallback to legacy systemPrompt field
-      systemPrompt = settings.systemPrompt || FINANCIAL_REPORT_PROMPT;
+      systemPrompt = settingsData.systemPrompt || FINANCIAL_REPORT_PROMPT;
     }
 
     // Validate provider and model are enabled
-    const selectedProvider = settings.providers.find(
-      (p) => p.id === provider && p.enabled
+    const providers = settingsData.providers || [];
+    const selectedProvider = providers.find(
+      (p: any) => p.id === provider && p.enabled
     );
     if (!selectedProvider) {
       return new Response('Selected provider is not enabled', { status: 400 });
     }
 
     const selectedModel = selectedProvider.models.find(
-      (m) => m.id === model && m.enabled
+      (m: any) => m.id === model && m.enabled
     );
     if (!selectedModel) {
       return new Response('Selected model is not enabled', { status: 400 });
