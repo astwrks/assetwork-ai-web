@@ -90,7 +90,7 @@ After pushing to main, Netlify will automatically rebuild (if it's watching the 
 After deployment succeeds, test these URLs:
 - `/settings` - Should show the new financial data integration tab
 - `/financial-playground` - Should show the playground
-- `/financial-playground-v2` - Should show playground v2
+- `/financial-playground` - Should show financial playground
 
 ## Need Help?
 

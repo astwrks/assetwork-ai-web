@@ -43,22 +43,14 @@ export async function GET(request: NextRequest) {
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     // Check cache
-    const cacheKey = `watchlists:${user.id}`;
+    const cacheKey = `watchlists:${userId}`;
     const cached = await CacheService.get(cacheKey);
     if (cached) {
       PerformanceMonitor.end(operationId, { cached: true });
@@ -72,7 +64,7 @@ export async function GET(request: NextRequest) {
     // Fetch watchlists
     const watchlists = await prisma.watchlists.findMany({
       where: {
-        userId: user.id,
+        userId: userId,
       },
       include: {
         watchlist_symbols: {
@@ -111,12 +103,12 @@ export async function GET(request: NextRequest) {
     await CacheService.set(cacheKey, transformedWatchlists, CacheTTL.SHORT);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       count: watchlists.length,
     });
 
     LoggingService.info('Watchlists fetched', {
-      userId: user.id,
+      userId: userId,
       count: watchlists.length,
       duration,
     });
@@ -165,19 +157,11 @@ export async function POST(request: NextRequest) {
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     // Parse and validate request
     const body = await request.json();
@@ -185,7 +169,7 @@ export async function POST(request: NextRequest) {
 
     // Check watchlist limit
     const watchlistCount = await prisma.watchlists.count({
-      where: { userId: user.id },
+      where: { userId: userId },
     });
 
     if (watchlistCount >= 10) {
@@ -196,7 +180,7 @@ export async function POST(request: NextRequest) {
     const watchlist = await prisma.watchlists.create({
       data: {
         id: nanoid(),
-        userId: user.id,
+        userId: userId,
         name: validated.name,
         description: validated.description,
         isPublic: validated.isPublic,
@@ -217,16 +201,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Clear cache
-    await CacheService.del(`watchlists:${user.id}`);
+    await CacheService.del(`watchlists:${userId}`);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       watchlistId: watchlist.id,
       symbolCount: validated.symbols.length,
     });
 
     LoggingService.info('Watchlist created', {
-      userId: user.id,
+      userId: userId,
       watchlistId: watchlist.id,
       name: watchlist.name,
       symbolCount: validated.symbols.length,
@@ -294,19 +278,11 @@ export async function PATCH(request: NextRequest) {
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     // Get watchlist ID from query
     const watchlistId = request.nextUrl.searchParams.get('id');
@@ -322,7 +298,7 @@ export async function PATCH(request: NextRequest) {
     const watchlist = await prisma.watchlists.findFirst({
       where: {
         id: watchlistId,
-        userId: user.id,
+        userId: userId,
       },
     });
 
@@ -362,15 +338,15 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Clear cache
-    await CacheService.del(`watchlists:${user.id}`);
+    await CacheService.del(`watchlists:${userId}`);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       watchlistId,
     });
 
     LoggingService.info('Watchlist updated', {
-      userId: user.id,
+      userId: userId,
       watchlistId,
       changes: Object.keys(validated),
       duration,
@@ -436,19 +412,11 @@ export async function DELETE(request: NextRequest) {
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     // Get watchlist ID from query
     const watchlistId = request.nextUrl.searchParams.get('id');
@@ -460,7 +428,7 @@ export async function DELETE(request: NextRequest) {
     const watchlist = await prisma.watchlists.findFirst({
       where: {
         id: watchlistId,
-        userId: user.id,
+        userId: userId,
       },
     });
 
@@ -474,15 +442,15 @@ export async function DELETE(request: NextRequest) {
     });
 
     // Clear cache
-    await CacheService.del(`watchlists:${user.id}`);
+    await CacheService.del(`watchlists:${userId}`);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       watchlistId,
     });
 
     LoggingService.info('Watchlist deleted', {
-      userId: user.id,
+      userId: userId,
       watchlistId,
       duration,
     });

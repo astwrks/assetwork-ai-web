@@ -41,19 +41,12 @@ export async function POST(
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, name: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
+    const userName = session.user.name;
 
     const reportId = params.reportId;
 
@@ -66,7 +59,7 @@ export async function POST(
       where: {
         id: reportId,
         threads: {
-          userId: user.id,
+          userId: userId,
         },
       },
       include: {
@@ -111,7 +104,7 @@ export async function POST(
         id: shareId,
         reportId,
         shareToken,
-        createdBy: user.id,
+        createdBy: userId,
         expiresAt,
         passwordHash: hashedPassword,
         maxViews: validated.maxViews,
@@ -122,7 +115,7 @@ export async function POST(
         metadata: {
           reportTitle: report.threads.title,
           reportDescription: report.threads.description,
-          sharedBy: user.name || user.email,
+          sharedBy: userName || session.user.email,
         },
       },
     });
@@ -155,13 +148,13 @@ export async function POST(
     }
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       reportId,
       shareId,
     });
 
     LoggingService.info('Report share created', {
-      userId: user.id,
+      userId: userId,
       reportId,
       shareId,
       expiresIn: validated.expiresIn,
@@ -234,19 +227,11 @@ export async function GET(
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     const reportId = params.reportId;
 
@@ -255,7 +240,7 @@ export async function GET(
       where: {
         id: reportId,
         threads: {
-          userId: user.id,
+          userId: userId,
         },
       },
     });
@@ -268,7 +253,7 @@ export async function GET(
     const shares = await prisma.report_shares.findMany({
       where: {
         reportId,
-        createdBy: user.id,
+        createdBy: userId,
       },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -297,13 +282,13 @@ export async function GET(
     }));
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       reportId,
       shareCount: shares.length,
     });
 
     LoggingService.info('Report shares fetched', {
-      userId: user.id,
+      userId: userId,
       reportId,
       shareCount: shares.length,
       duration,
@@ -356,19 +341,11 @@ export async function DELETE(
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     const reportId = params.reportId;
     const shareId = request.nextUrl.searchParams.get('shareId');
@@ -382,7 +359,7 @@ export async function DELETE(
       where: {
         id: shareId,
         reportId,
-        createdBy: user.id,
+        createdBy: userId,
       },
     });
 
@@ -399,13 +376,13 @@ export async function DELETE(
     await CacheService.del(`share:${shareId}`);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       reportId,
       shareId,
     });
 
     LoggingService.info('Report share revoked', {
-      userId: user.id,
+      userId: userId,
       reportId,
       shareId,
       duration,

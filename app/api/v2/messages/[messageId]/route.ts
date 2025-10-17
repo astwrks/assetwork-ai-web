@@ -30,19 +30,11 @@ export async function GET(
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     const messageId = params.messageId;
 
@@ -61,17 +53,17 @@ export async function GET(
     }
 
     // Verify ownership through thread
-    if (message.threads.userId !== user.id) {
+    if (message.threads.userId !== userId) {
       throw AppErrors.FORBIDDEN;
     }
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       messageId,
     });
 
     LoggingService.info('Message fetched', {
-      userId: user.id,
+      userId: userId,
       messageId,
       duration,
     });
@@ -129,19 +121,11 @@ export async function PATCH(
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     const messageId = params.messageId;
 
@@ -164,7 +148,7 @@ export async function PATCH(
     }
 
     // Verify ownership through thread
-    if (message.threads.userId !== user.id) {
+    if (message.threads.userId !== userId) {
       throw AppErrors.FORBIDDEN;
     }
 
@@ -178,7 +162,7 @@ export async function PATCH(
 
     // Clear caches
     await CacheService.clearPattern(`messages:${message.threadId}:*`);
-    await CacheService.del(`thread:${message.threadId}:${user.id}`);
+    await CacheService.del(`thread:${message.threadId}:${userId}`);
 
     // Broadcast via WebSocket if available
     if (typeof process !== 'undefined' && (global as any).io) {
@@ -194,7 +178,7 @@ export async function PATCH(
     });
 
     LoggingService.info('Message updated', {
-      userId: user.id,
+      userId: userId,
       messageId,
       changes: Object.keys(validated),
       duration,
@@ -264,19 +248,11 @@ export async function DELETE(
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     const messageId = params.messageId;
 
@@ -295,7 +271,7 @@ export async function DELETE(
     }
 
     // Verify ownership through thread
-    if (message.threads.userId !== user.id) {
+    if (message.threads.userId !== userId) {
       throw AppErrors.FORBIDDEN;
     }
 
@@ -307,14 +283,14 @@ export async function DELETE(
           ...(message.metadata as object || {}),
           deleted: true,
           deletedAt: new Date(),
-          deletedBy: user.id,
+          deletedBy: userId,
         },
       },
     });
 
     // Clear caches
     await CacheService.clearPattern(`messages:${message.threadId}:*`);
-    await CacheService.del(`thread:${message.threadId}:${user.id}`);
+    await CacheService.del(`thread:${message.threadId}:${userId}`);
 
     // Broadcast via WebSocket if available
     if (typeof process !== 'undefined' && (global as any).io) {
@@ -324,12 +300,12 @@ export async function DELETE(
     }
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       messageId,
     });
 
     LoggingService.info('Message deleted', {
-      userId: user.id,
+      userId: userId,
       messageId,
       threadId: message.threadId,
       duration,

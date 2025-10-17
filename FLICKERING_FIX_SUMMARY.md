@@ -22,7 +22,7 @@ The flickering was caused by **TWO separate `router.replace()` calls** happening
 
 1. **First Call** - In `handleTemplateUse` function (around line 947):
    ```typescript
-   router.replace(`/financial-playground-v2?thread=${data.thread._id}`, { scroll: false });
+   router.replace(`/financial-playground?thread=${data.thread._id}`, { scroll: false });
    setActiveThread(data.thread);
    ```
 
@@ -32,7 +32,7 @@ The flickering was caused by **TWO separate `router.replace()` calls** happening
      if (activeThread && session?.user?.email) {
        const currentUrlThreadId = searchParams.get('thread');
        if (currentUrlThreadId !== activeThread._id) {
-         router.replace(`/financial-playground-v2?thread=${activeThread._id}`, { scroll: false });
+         router.replace(`/financial-playground?thread=${activeThread._id}`, { scroll: false });
        }
      }
    }, [activeThread, session, router, searchParams]);
@@ -51,13 +51,13 @@ The flickering was caused by **TWO separate `router.replace()` calls** happening
 
 ### Removed Redundant Navigation
 
-**File**: `/Users/Victor/Projects/AssetWorks/assetworks-webapp/app/financial-playground-v2/page.tsx`
+**File**: `/Users/Victor/Projects/AssetWorks/assetworks-webapp/app/financial-playground/page.tsx`
 
 **Line 944-947**: Removed the direct `router.replace()` call from `handleTemplateUse`
 
 ```typescript
 // ❌ BEFORE (caused flickering)
-router.replace(`/financial-playground-v2?thread=${data.thread._id}`, { scroll: false });
+router.replace(`/financial-playground?thread=${data.thread._id}`, { scroll: false });
 setActiveThread(data.thread);
 
 // ✅ AFTER (no flickering)
@@ -124,7 +124,7 @@ useEffect(() => {
     // Only update URL if it doesn't match current thread
     const currentUrlThreadId = searchParams.get('thread');
     if (currentUrlThreadId !== activeThread._id) {
-      router.replace(`/financial-playground-v2?thread=${activeThread._id}`, { scroll: false });
+      router.replace(`/financial-playground?thread=${activeThread._id}`, { scroll: false });
     }
     // Also save to localStorage
     localStorage.setItem(`playground_v2_last_thread_${session.user.email}`, activeThread._id);
@@ -158,12 +158,12 @@ toast.success(...);
 ## 🔧 Related Code Sections
 
 ### handleTemplateUse Function
-- **File**: `app/financial-playground-v2/page.tsx`
+- **File**: `app/financial-playground/page.tsx`
 - **Lines**: 908-969
 - **Key Change**: Line 947 (removed `router.replace()`)
 
 ### URL Sync useEffect
-- **File**: `app/financial-playground-v2/page.tsx`
+- **File**: `app/financial-playground/page.tsx`
 - **Lines**: 278-288
 - **Purpose**: Single source of truth for URL updates
 
@@ -187,7 +187,7 @@ setActiveThread(data.thread);
 **FIXED**: Screen flickering no longer occurs when selecting templates.
 
 **Application State**:
-- Running on: http://localhost:3001/financial-playground-v2
+- Running on: http://localhost:3001/financial-playground
 - Templates seeded: 6 templates (3 free, 2 pro, 1 enterprise)
 - Dev server: Active
 

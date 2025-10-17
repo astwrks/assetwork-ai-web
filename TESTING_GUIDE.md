@@ -4,7 +4,7 @@
 
 ### Access the Application
 ```
-🌐 http://localhost:3001/financial-playground-v2
+🌐 http://localhost:3001/financial-playground
 ```
 
 ---
@@ -208,7 +208,7 @@ Click "Use Template" → setActiveThread() → useEffect triggers → router.rep
 
 ### Key Code Section
 
-`app/financial-playground-v2/page.tsx` line 944-947:
+`app/financial-playground/page.tsx` line 944-947:
 
 ```typescript
 // Set the new thread as active
@@ -228,7 +228,7 @@ setActiveThread(data.thread);
 - [ ] Mobile responsive (test on phone)
 - [ ] Different browsers (Chrome, Safari, Firefox)
 - [ ] Template database seeded
-- [ ] MongoDB connection stable
+- [ ] PostgreSQL connection stable (Neon)
 
 ---
 
@@ -282,7 +282,7 @@ Once all scenarios pass:
 - **UX**: ✅ Smooth
 - **Templates**: ✅ Working
 
-**Start Testing**: http://localhost:3001/financial-playground-v2
+**Start Testing**: http://localhost:3001/financial-playground
 
 ---
 

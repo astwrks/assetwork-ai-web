@@ -9,50 +9,40 @@ import { prisma } from '@/lib/db/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { threadId: string } }
+  { params }: { params: Promise<{ threadId: string }> }
 ) {
   try {
-    // Authentication
+    // Authentication - session already contains user.id from JWT callback
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
+    const userId = session.user.id;
+
     // Get format from query
     const searchParams = request.nextUrl.searchParams;
     const format = searchParams.get('format') || 'markdown';
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'User not found' },
-        { status: 404 }
-      );
-    }
+    // Await params in Next.js 15
+    const { threadId } = await params;
 
     // Get thread with messages
     const thread = await prisma.threads.findFirst({
       where: {
-        id: params.threadId,
-        userId: user.id,
+        id: threadId,
+        userId: userId,
       },
       include: {
         messages: {
           orderBy: { createdAt: 'asc' },
         },
-        reports: {
+        playground_reports: {
           orderBy: { createdAt: 'desc' },
           take: 1,
-          include: {
-            sections: true,
-          },
         },
       },
     });
@@ -85,12 +75,12 @@ export async function GET(
           metadata: msg.metadata,
           createdAt: msg.createdAt,
         })),
-        report: thread.reports[0] ? {
-          id: thread.reports[0].id,
-          title: thread.reports[0].title,
-          sections: thread.reports[0].sections,
-          metadata: thread.reports[0].metadata,
-          createdAt: thread.reports[0].createdAt,
+        report: thread.playground_reports[0] ? {
+          id: thread.playground_reports[0].id,
+          title: thread.playground_reports[0].title,
+          htmlContent: thread.playground_reports[0].htmlContent,
+          metadata: thread.playground_reports[0].metadata,
+          createdAt: thread.playground_reports[0].createdAt,
         } : null,
         exportedAt: timestamp,
       }, null, 2);
@@ -143,17 +133,23 @@ export async function GET(
         content += `---\n\n`;
       });
 
-      // Add report sections if available
-      if (thread.reports[0]) {
+      // Add report if available
+      if (thread.playground_reports[0]) {
         content += `## Generated Report\n\n`;
-        content += `**Title:** ${thread.reports[0].title}\n`;
-        content += `**Generated:** ${new Date(thread.reports[0].createdAt).toLocaleString()}\n\n`;
+        content += `**Title:** ${thread.playground_reports[0].title}\n`;
+        content += `**Generated:** ${new Date(thread.playground_reports[0].createdAt).toLocaleString()}\n\n`;
 
-        if (thread.reports[0].sections && thread.reports[0].sections.length > 0) {
-          thread.reports[0].sections.forEach((section: any) => {
-            content += `### ${section.title}\n\n`;
-            content += `${section.content}\n\n`;
-          });
+        if (thread.playground_reports[0].htmlContent) {
+          // Strip HTML for markdown export
+          const plainContent = thread.playground_reports[0].htmlContent
+            .replace(/<[^>]*>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/&#039;/g, "'");
+          content += `${plainContent}\n\n`;
         }
       }
 

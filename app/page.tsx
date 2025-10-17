@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import {
   TrendingUp,
   Sparkles,
@@ -12,333 +13,221 @@ import {
   BarChart3,
   Brain,
   ArrowRight,
-  Globe,
-  Users,
   Activity,
-  Shield,
-  Infinity as InfinityIcon,
-  Rocket,
-  Terminal,
-  LineChart,
-  PieChart,
-  DollarSign,
-  Lock,
-  Cpu,
-  Cloud,
-  Gauge,
-  Target,
-  TrendingDown,
-  CheckCircle2,
   Play,
-  Download,
-  Code,
-  Layers,
-  Database,
-  GitBranch,
-  Workflow,
+  Building2,
+  Hash,
+  MessageSquare,
+  Search,
   FileText,
   Clock,
-  Boxes,
-  ArrowUpRight,
-  Check,
-  X,
-  Star,
-  Building2,
-  Briefcase,
-  Lightbulb,
-  Settings,
-  Bell,
-  Award,
-  Package,
-  Search,
-  Filter,
+  Target,
+  Users,
+  CheckCircle2,
+  Globe,
+  Layers,
+  Github,
+  Twitter,
+  Linkedin,
   Send,
-  MessageSquare,
-  Hash,
-  Box,
-  CreditCard,
-  RefreshCw,
-  Snowflake,
-  Link2,
-  CloudIcon,
+  AlertCircle,
+  BookOpen,
+  Code2,
+  Database,
+  Shield,
+  ArrowUpRight,
+  Bot,
+  Cpu,
+  MousePointer,
+  Gauge,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { cn } from '@/lib/utils';
+import DemoSection from '@/components/homepage/demo-section';
 
-export default function LandingPage() {
-  const [activeTab, setActiveTab] = useState('individuals');
-  const [activePricingTab, setActivePricingTab] = useState('monthly');
-  const [selectedFeature, setSelectedFeature] = useState(0);
-  const [isHeroInView, setIsHeroInView] = useState(true);
+export default function HomePage() {
+  const [currentEntityIndex, setCurrentEntityIndex] = useState(0);
+  const [typedQuery, setTypedQuery] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState('');
+  const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
 
   const { scrollYProgress } = useScroll();
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0]);
-  const heroScale = useTransform(scrollYProgress, [0, 0.2], [1, 0.95]);
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
+  const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -50]);
 
-  // Auto-rotate feature showcase
+  // Example queries to type
+  const exampleQueries = [
+    "Analyze Apple's Q4 performance and market position",
+    "Compare Indian retail giants: Reliance vs DMart",
+    "What are the risks in the semiconductor industry?",
+    "Generate a bull case for renewable energy stocks",
+    "Explain the latest Fed policy impact on tech stocks",
+  ];
+
+  // Rotating entities showcase
+  const entities = [
+    { name: 'Apple', ticker: 'AAPL', type: 'COMPANY', sentiment: '+82%', mentions: 1847 },
+    { name: 'NVIDIA', ticker: 'NVDA', type: 'COMPANY', sentiment: '+91%', mentions: 2103 },
+    { name: 'Bitcoin', ticker: 'BTC', type: 'CRYPTOCURRENCY', sentiment: '+67%', mentions: 892 },
+    { name: 'S&P 500', ticker: 'SPX', type: 'INDEX', sentiment: '+54%', mentions: 3291 },
+    { name: 'Tesla', ticker: 'TSLA', type: 'COMPANY', sentiment: '+73%', mentions: 1562 },
+  ];
+
+  // Auto-rotate entities
   useEffect(() => {
     const interval = setInterval(() => {
-      setSelectedFeature((prev) => (prev + 1) % 6);
-    }, 4000);
+      setCurrentEntityIndex((prev) => (prev + 1) % entities.length);
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  // Removed typing animation - using predefined queries instead
+
+  // Simulate report generation
+  const handleTryDemo = () => {
+    setIsGenerating(true);
+    setGeneratedContent('');
+
+    // Simulate streaming content
+    const content = `## Market Analysis Report
+
+### Executive Summary
+Based on comprehensive analysis of recent market data and company filings, we've identified key trends and opportunities in the technology sector...
+
+### Key Entities Identified
+• **Apple (AAPL)** - Positive sentiment: 82% | Market leader in consumer electronics
+• **NVIDIA (NVDA)** - Positive sentiment: 91% | Dominating AI chip market
+• **Microsoft (MSFT)** - Positive sentiment: 78% | Cloud growth accelerating
+
+### Financial Highlights
+The technology sector shows strong momentum with average YoY growth of 23.4%...`;
+
+    let currentChar = 0;
+    const streamInterval = setInterval(() => {
+      if (currentChar < content.length) {
+        setGeneratedContent(content.substring(0, currentChar + 10));
+        currentChar += 10;
+      } else {
+        clearInterval(streamInterval);
+        setIsGenerating(false);
+      }
+    }, 30);
+
+    setTimeout(() => {
+      clearInterval(streamInterval);
+      setIsGenerating(false);
+      setGeneratedContent(content);
+    }, 3000);
+  };
 
   const features = [
     {
       icon: Brain,
-      title: 'AI-Powered Analysis',
-      description: 'Advanced machine learning algorithms that understand context, detect patterns, and provide actionable insights from your financial data in real-time.',
-      benefits: ['Pattern Recognition', 'Predictive Analytics', 'Anomaly Detection', 'Smart Recommendations'],
+      title: 'AI Financial Analyst',
+      description: 'Claude-powered analysis that understands context and generates institutional-quality reports',
+      demo: '95% accuracy',
       color: 'from-blue-500 to-cyan-500',
-      demoIcon: BarChart3,
-      metrics: { accuracy: '99.8%', speed: '47ms', models: '12+' }
+    },
+    {
+      icon: Building2,
+      title: 'Entity Intelligence',
+      description: 'Automatic extraction of companies, people, and financial entities with sentiment analysis',
+      demo: '10K+ entities',
+      color: 'from-purple-500 to-pink-500',
     },
     {
       icon: Zap,
-      title: 'Lightning Fast Processing',
-      description: 'Process millions of transactions per second with our optimized infrastructure. Generate comprehensive reports in under 100ms with enterprise-grade performance.',
-      benefits: ['Sub-100ms Response', 'Parallel Processing', 'Edge Computing', 'Auto-scaling'],
-      color: 'from-yellow-500 to-orange-500',
-      demoIcon: Zap,
-      metrics: { latency: '47ms', throughput: '10M/s', uptime: '99.99%' }
+      title: 'Real-time Generation',
+      description: 'Stream reports as they generate with token counting and live entity extraction',
+      demo: '<100ms latency',
+      color: 'from-orange-500 to-red-500',
+    },
+    {
+      icon: Database,
+      title: 'Knowledge Graph',
+      description: 'Build a connected graph of financial entities, relationships, and historical insights',
+      demo: '50M+ data points',
+      color: 'from-green-500 to-emerald-500',
     },
     {
       icon: Shield,
       title: 'Enterprise Security',
-      description: 'Bank-level encryption with SOC2 Type II, GDPR, and CCPA compliance. Your data is protected with military-grade security and isolated tenant architecture.',
-      benefits: ['256-bit Encryption', 'SOC2 Certified', 'GDPR Compliant', 'Zero-trust Security'],
-      color: 'from-green-500 to-emerald-500',
-      demoIcon: Lock,
-      metrics: { certified: 'SOC2 II', encryption: 'AES-256', compliance: '4+' }
+      description: 'Bank-level encryption, SOC2 compliance, and isolated data processing',
+      demo: 'SOC2 Type II',
+      color: 'from-gray-500 to-slate-500',
     },
     {
-      icon: InfinityIcon,
-      title: 'Infinite Scalability',
-      description: 'Built on cloud-native infrastructure that scales automatically. Handle billions of data points without performance degradation or infrastructure management.',
-      benefits: ['Auto-scaling', 'Global CDN', '99.99% Uptime SLA', 'Multi-region Support'],
-      color: 'from-purple-500 to-pink-500',
-      demoIcon: InfinityIcon,
-      metrics: { regions: '15+', datapoints: '50B+', users: '500K+' }
-    },
-    {
-      icon: Workflow,
-      title: 'Advanced Automation',
-      description: 'Automate repetitive tasks with smart workflows. Set up rules, triggers, and custom logic to streamline your financial operations and save hours daily.',
-      benefits: ['Custom Workflows', 'API Integrations', 'Event Triggers', 'No-code Builder'],
+      icon: Code2,
+      title: 'API Access',
+      description: 'Comprehensive REST API for custom integrations and workflow automation',
+      demo: '100+ endpoints',
       color: 'from-indigo-500 to-blue-500',
-      demoIcon: RefreshCw,
-      metrics: { integrations: '100+', workflows: 'Unlimited', saved: '73%' }
-    },
-    {
-      icon: LineChart,
-      title: 'Real-time Analytics',
-      description: 'Monitor your financial metrics in real-time with customizable dashboards. Track KPIs, trends, and anomalies with interactive visualizations.',
-      benefits: ['Live Dashboards', 'Custom Reports', 'Data Export', 'Alert System'],
-      color: 'from-red-500 to-pink-500',
-      demoIcon: TrendingUp,
-      metrics: { refresh: 'Real-time', charts: '50+', exports: 'Unlimited' }
     },
   ];
 
-  const pricingPlans = [
+  const useCases = [
     {
-      name: 'Starter',
-      description: 'Perfect for individual investors',
-      monthlyPrice: 29,
-      annualPrice: 290,
-      features: [
-        { name: 'Up to 10 portfolios', included: true },
-        { name: '1,000 AI credits/month', included: true },
-        { name: 'Basic analytics', included: true },
-        { name: 'Email support', included: true },
-        { name: 'API access', included: false },
-        { name: 'Custom integrations', included: false },
-        { name: 'SSO & RBAC', included: false },
-        { name: '99.99% SLA', included: false },
-      ],
-      cta: 'Start Free Trial',
-      popular: false,
+      title: 'Investment Research',
+      description: 'Generate comprehensive research reports with AI-powered insights',
+      icon: FileText,
+      example: 'Analyze AAPL Q4 earnings',
     },
     {
-      name: 'Professional',
-      description: 'For financial advisors & teams',
-      monthlyPrice: 99,
-      annualPrice: 990,
-      features: [
-        { name: 'Unlimited portfolios', included: true },
-        { name: '10,000 AI credits/month', included: true },
-        { name: 'Advanced analytics', included: true },
-        { name: 'Priority support', included: true },
-        { name: 'API access', included: true },
-        { name: 'Custom integrations', included: true },
-        { name: 'SSO & RBAC', included: false },
-        { name: '99.99% SLA', included: false },
-      ],
-      cta: 'Start Free Trial',
-      popular: true,
+      title: 'Market Analysis',
+      description: 'Track market trends and sentiment across thousands of entities',
+      icon: TrendingUp,
+      example: 'Tech sector outlook 2024',
     },
     {
-      name: 'Enterprise',
-      description: 'For large organizations',
-      monthlyPrice: null,
-      annualPrice: null,
-      features: [
-        { name: 'Unlimited portfolios', included: true },
-        { name: 'Unlimited AI credits', included: true },
-        { name: 'Enterprise analytics', included: true },
-        { name: 'Dedicated support', included: true },
-        { name: 'API access', included: true },
-        { name: 'Custom integrations', included: true },
-        { name: 'SSO & RBAC', included: true },
-        { name: '99.99% SLA', included: true },
-      ],
-      cta: 'Contact Sales',
-      popular: false,
-    },
-  ];
-
-  const caseStudies = [
-    {
-      company: 'TechBank',
-      icon: Building2,
-      industry: 'Banking',
-      challenge: 'Manual report generation taking 40+ hours per week',
-      solution: 'Automated workflows with AI-powered analysis',
-      results: [
-        { metric: 'Time Saved', value: '90%', icon: Clock },
-        { metric: 'Accuracy', value: '99.8%', icon: Target },
-        { metric: 'Cost Reduction', value: '$2.4M/yr', icon: DollarSign },
-      ],
-      quote: "AssetWorks transformed our operations. We've eliminated manual work and improved accuracy dramatically.",
-      author: 'Sarah Chen, CTO',
+      title: 'Risk Assessment',
+      description: 'Identify and quantify risks with intelligent pattern recognition',
+      icon: AlertCircle,
+      example: 'Portfolio risk analysis',
     },
     {
-      company: 'InvestCorp',
-      icon: BarChart3,
-      industry: 'Investment Management',
-      challenge: 'Inability to scale client reporting',
-      solution: 'Enterprise platform with custom integrations',
-      results: [
-        { metric: 'Clients Served', value: '10x', icon: Users },
-        { metric: 'Report Speed', value: '100x', icon: Zap },
-        { metric: 'Revenue Growth', value: '+250%', icon: TrendingUp },
-      ],
-      quote: "We went from managing 50 clients to 500 clients without adding headcount.",
-      author: 'Michael Rodriguez, CEO',
+      title: 'Competitive Intelligence',
+      description: 'Compare companies and track competitive dynamics',
+      icon: Target,
+      example: 'Tesla vs traditional auto',
     },
-    {
-      company: 'Global Finance',
-      icon: Globe,
-      industry: 'Financial Services',
-      challenge: 'Complex compliance requirements across regions',
-      solution: 'Multi-region deployment with SOC2 certification',
-      results: [
-        { metric: 'Regions', value: '15', icon: Globe },
-        { metric: 'Compliance', value: '100%', icon: CheckCircle2 },
-        { metric: 'Audit Time', value: '-80%', icon: Clock },
-      ],
-      quote: "The security and compliance features gave us confidence to expand globally.",
-      author: 'Emily Thompson, Chief Compliance Officer',
-    },
-  ];
-
-  const comparisonFeatures = [
-    { name: 'AI-Powered Analysis', assetworks: true, competitor1: false, competitor2: true },
-    { name: 'Sub-100ms Response Time', assetworks: true, competitor1: false, competitor2: false },
-    { name: 'Real-time Analytics', assetworks: true, competitor1: true, competitor2: false },
-    { name: 'SOC2 Type II Certified', assetworks: true, competitor1: true, competitor2: false },
-    { name: 'Custom Integrations', assetworks: true, competitor1: false, competitor2: false },
-    { name: 'No-code Workflow Builder', assetworks: true, competitor1: false, competitor2: false },
-    { name: 'Multi-region Support', assetworks: true, competitor1: false, competitor2: true },
-    { name: 'API Access', assetworks: true, competitor1: true, competitor2: true },
-    { name: '99.99% Uptime SLA', assetworks: true, competitor1: false, competitor2: false },
-    { name: 'White-label Options', assetworks: true, competitor1: false, competitor2: false },
-  ];
-
-  const faqs = [
-    {
-      question: 'How does AssetWorks pricing work?',
-      answer: 'We offer flexible pricing based on your usage. Start with our Starter plan at $29/month, upgrade to Professional at $99/month, or contact us for Enterprise pricing. All plans include a 14-day free trial with no credit card required.',
-    },
-    {
-      question: 'What security certifications does AssetWorks have?',
-      answer: 'AssetWorks is SOC2 Type II certified, GDPR compliant, and CCPA compliant. We use bank-level AES-256 encryption for data at rest and TLS 1.3 for data in transit. We also maintain isolated tenant architectures and zero-trust security models.',
-    },
-    {
-      question: 'Can I integrate AssetWorks with my existing tools?',
-      answer: 'Yes! AssetWorks integrates with 100+ popular services including Stripe, QuickBooks, Salesforce, Slack, and more. We also offer a comprehensive REST API for custom integrations.',
-    },
-    {
-      question: 'What kind of support do you offer?',
-      answer: 'We offer email support for Starter plans, priority support for Professional plans, and dedicated support teams for Enterprise customers. Response times range from 24 hours (Starter) to under 1 hour (Enterprise).',
-    },
-    {
-      question: 'How does the AI-powered analysis work?',
-      answer: 'Our AI uses advanced machine learning models trained on billions of data points to detect patterns, predict trends, and provide actionable insights. The AI continuously learns from your data to improve accuracy over time.',
-    },
-    {
-      question: 'What happens to my data if I cancel?',
-      answer: 'You can export all your data at any time in standard formats (CSV, JSON, PDF). After cancellation, we retain your data for 30 days before permanent deletion. Enterprise customers can negotiate custom retention policies.',
-    },
-  ];
-
-  const integrations = [
-    { name: 'Stripe', icon: CreditCard, category: 'Payments', description: 'Payment processing & billing' },
-    { name: 'QuickBooks', icon: BarChart3, category: 'Accounting', description: 'Financial data sync' },
-    { name: 'Salesforce', icon: Cloud, category: 'CRM', description: 'Customer relationship management' },
-    { name: 'Slack', icon: MessageSquare, category: 'Communication', description: 'Team notifications' },
-    { name: 'Zapier', icon: Zap, category: 'Automation', description: '5000+ app connections' },
-    { name: 'Google Workspace', icon: Box, category: 'Productivity', description: 'Docs, Sheets, Drive' },
-    { name: 'Microsoft 365', icon: Package, category: 'Enterprise', description: 'Office suite integration' },
-    { name: 'AWS', icon: CloudIcon, category: 'Infrastructure', description: 'Cloud deployment' },
-    { name: 'Snowflake', icon: Snowflake, category: 'Data Warehouse', description: 'Data analytics' },
-    { name: 'Tableau', icon: TrendingUp, category: 'BI Tools', description: 'Business intelligence' },
-    { name: 'Power BI', icon: BarChart3, category: 'BI Tools', description: 'Microsoft BI platform' },
-    { name: 'Plaid', icon: Link2, category: 'Banking', description: 'Bank account connections' },
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/40">
+      <nav className="fixed top-0 z-50 w-full bg-background/80 backdrop-blur-xl border-b border-border/40">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
                 <TrendingUp className="w-6 h-6 text-white" />
               </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                AssetWorks
-              </span>
+              <span className="text-2xl font-bold">AssetWorks</span>
             </Link>
 
             <div className="hidden md:flex items-center gap-8">
+              <Link href="#demo" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Demo
+              </Link>
               <Link href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
                 Features
               </Link>
-              <Link href="#solutions" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                Solutions
-              </Link>
-              <Link href="#pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                Pricing
-              </Link>
-              <Link href="#customers" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                Customers
+              <Link href="#use-cases" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Use Cases
               </Link>
               <Link href="/docs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                Docs
+                Documentation
               </Link>
             </div>
 
             <div className="flex items-center gap-4">
-              <Link href="/financial-playground">
-                <Button variant="ghost" size="sm">Financial Playground</Button>
-              </Link>
               <Link href="/auth/signin">
                 <Button variant="ghost" size="sm">Sign In</Button>
               </Link>
-              <Link href="/auth/signup">
-                <Button size="sm" className="gap-2">
-                  Get Started Free
+              <Link href="/financial-playground">
+                <Button size="sm" className="gap-2 shadow-lg shadow-blue-600/20">
+                  Try Playground
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
@@ -349,844 +238,330 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <motion.section
-        style={{ opacity: heroOpacity, scale: heroScale }}
-        className="relative pt-20 pb-12 overflow-hidden"
+        style={{ opacity: heroOpacity, y: heroY }}
+        className="relative pt-32 pb-20 px-6"
       >
-        {/* Animated Grid Background */}
+        {/* Background Effects */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-secondary/5 to-transparent" />
-          <div
-            className="absolute inset-0 opacity-[0.03]"
-            style={{
-              backgroundImage: `
-                linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px),
-                linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px)
-              `,
-              backgroundSize: '80px 80px',
-            }}
-          />
-          {/* Animated gradient orbs */}
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-20 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-[100px] animate-pulse" />
+          <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
         </div>
 
-        <div className="max-w-7xl mx-auto px-6 relative">
-          <div className="text-center max-w-4xl mx-auto mb-12">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full mb-6 backdrop-blur-sm"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-medium text-primary">
-                Trusted by 500K+ Financial Professionals
-              </span>
-            </motion.div>
+        <div className="max-w-6xl mx-auto relative">
+          {/* Announcement Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex justify-center mb-8"
+          >
+            <Badge variant="outline" className="px-4 py-1.5 gap-2 bg-blue-500/10 border-blue-500/30">
+              <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+              <span className="text-sm">Powered by Claude 3.5 Sonnet</span>
+            </Badge>
+          </motion.div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="text-5xl md:text-6xl font-bold mb-6 leading-[1.1] tracking-tight"
-            >
+          {/* Main Headline */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="text-center"
+          >
+            <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
               Financial Intelligence
               <br />
-              <span className="bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient">
-                Built for Scale
+              <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                Powered by AI
               </span>
-            </motion.h1>
+            </h1>
 
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed"
-            >
-              Transform billions of data points into actionable insights in milliseconds.
-              Enterprise-grade AI platform with bank-level security.
-            </motion.p>
+            <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto mb-10 leading-relaxed">
+              Generate institutional-quality financial reports with AI.
+              Extract entities, analyze sentiment, and build a knowledge graph of the financial world.
+            </p>
+          </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="flex flex-col sm:flex-row gap-3 justify-center mb-6"
-            >
-              <Link href="/financial-playground">
-                <Button size="lg" className="h-12 px-8 gap-2 shadow-lg shadow-primary/25">
-                  <Rocket className="w-4 h-4" />
-                  Start Free Trial
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </Link>
-              <Button size="lg" variant="outline" className="h-12 px-8 gap-2">
-                <Play className="w-4 h-4" />
-                Watch Demo
-              </Button>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="flex items-center justify-center gap-6 text-xs text-muted-foreground"
-            >
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                <span>No credit card</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                <span>14-day trial</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                <span>SOC2 certified</span>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Bento Grid Dashboard Preview */}
+          {/* CTA to Demo */}
           <motion.div
-            initial={{ opacity: 0, y: 40 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.5 }}
-            className="relative max-w-7xl mx-auto"
+            transition={{ delay: 0.2 }}
+            className="max-w-3xl mx-auto mb-8"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-secondary/20 to-transparent blur-3xl" />
+            <div className="text-center p-6 rounded-2xl bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-blue-500/20">
+              <p className="text-lg font-semibold mb-2">Experience AI-Powered Financial Analysis</p>
+              <p className="text-muted-foreground mb-4">Click on predefined queries below to see instant report generation</p>
+              <Button
+                size="lg"
+                className="gap-2 shadow-lg shadow-blue-600/25"
+                onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })}
+              >
+                <MousePointer className="w-4 h-4" />
+                Try Interactive Demo
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </motion.div>
 
-            <div className="relative bg-background/50 backdrop-blur-xl rounded-3xl border border-border shadow-2xl overflow-hidden">
-              {/* Browser Chrome */}
-              <div className="bg-muted/50 border-b border-border px-6 py-4 flex items-center gap-3">
-                <div className="flex gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-500" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
+          {/* Entity Showcase */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="flex flex-wrap justify-center gap-3"
+          >
+            {entities.map((entity, index) => (
+              <motion.div
+                key={entity.ticker}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{
+                  opacity: currentEntityIndex === index ? 1 : 0.5,
+                  scale: currentEntityIndex === index ? 1.05 : 1,
+                }}
+                transition={{ duration: 0.3 }}
+                className={cn(
+                  "px-4 py-2 rounded-full border bg-background/50 backdrop-blur-sm transition-all",
+                  currentEntityIndex === index ? "border-blue-500 shadow-lg shadow-blue-500/20" : "border-border"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    {entity.type === 'COMPANY' && <Building2 className="w-4 h-4 text-blue-500" />}
+                    {entity.type === 'CRYPTOCURRENCY' && <Hash className="w-4 h-4 text-orange-500" />}
+                    {entity.type === 'INDEX' && <TrendingUp className="w-4 h-4 text-green-500" />}
+                    <span className="font-semibold">{entity.name}</span>
+                    <span className="text-muted-foreground">({entity.ticker})</span>
+                  </div>
+                  <Badge variant="outline" className={cn(
+                    "text-xs",
+                    entity.sentiment.startsWith('+') ? "border-green-500 text-green-600" : "border-red-500 text-red-600"
+                  )}>
+                    {entity.sentiment}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">{entity.mentions} mentions</span>
                 </div>
-                <div className="flex-1 flex items-center justify-center gap-2 bg-background/50 rounded-lg px-4 py-2">
-                  <Lock className="w-3 h-3 text-green-500" />
-                  <span className="text-sm text-muted-foreground font-mono">https://app.assetworks.ai/dashboard</span>
-                </div>
-                <div className="flex gap-2">
-                  <Shield className="w-4 h-4 text-muted-foreground" />
-                  <Settings className="w-4 h-4 text-muted-foreground" />
-                </div>
-              </div>
+              </motion.div>
+            ))}
+          </motion.div>
 
-              {/* Bento Grid Layout */}
-              <div className="p-8 grid grid-cols-6 gap-4">
-                {/* Main Chart - Large */}
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  className="col-span-4 row-span-2 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-2xl p-6 border border-border/50 hover:border-primary/50 transition-all backdrop-blur-sm group"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-1">Portfolio Performance</h3>
-                      <p className="text-3xl font-bold">$2,847,392</p>
-                      <div className="flex items-center gap-2 text-sm text-green-500">
-                        <TrendingUp className="w-4 h-4" />
-                        <span>+23.4% this month</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="ghost" className="h-8">1D</Button>
-                      <Button size="sm" variant="ghost" className="h-8">1W</Button>
-                      <Button size="sm" variant="ghost" className="h-8 bg-primary text-primary-foreground">1M</Button>
-                      <Button size="sm" variant="ghost" className="h-8">1Y</Button>
-                    </div>
-                  </div>
-                  <div className="h-48 flex items-end justify-between gap-2">
-                    {[65, 72, 58, 84, 91, 78, 88, 95, 89, 92, 97, 100, 94, 98, 96].map((height, i) => (
-                      <motion.div
-                        key={i}
-                        initial={{ height: 0 }}
-                        animate={{ height: `${height}%` }}
-                        transition={{ delay: 0.6 + i * 0.05, duration: 0.5 }}
-                        className="flex-1 bg-gradient-to-t from-primary to-secondary rounded-t-lg opacity-80 group-hover:opacity-100 transition-opacity"
-                      />
-                    ))}
-                  </div>
-                </motion.div>
+          {/* CTA Buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="flex flex-col sm:flex-row gap-4 justify-center mt-12"
+          >
+            <Link href="/financial-playground">
+              <Button size="lg" className="h-12 px-8 gap-2 shadow-lg shadow-blue-600/25">
+                <Sparkles className="w-4 h-4" />
+                Launch Playground
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <Link href="/dashboard">
+              <Button size="lg" variant="outline" className="h-12 px-8 gap-2">
+                <BarChart3 className="w-4 h-4" />
+                View Dashboard
+              </Button>
+            </Link>
+            <Button size="lg" variant="ghost" className="h-12 px-8 gap-2" onClick={() => document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })}>
+              <MousePointer className="w-4 h-4" />
+              See it in Action
+            </Button>
+          </motion.div>
 
-                {/* Quick Stats - 2 columns */}
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  className="col-span-2 bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-2xl p-6 border border-border/50 hover:border-green-500/50 transition-all backdrop-blur-sm"
-                >
-                  <TrendingUp className="w-8 h-8 text-green-500 mb-3" />
-                  <p className="text-sm text-muted-foreground mb-1">Total Return</p>
-                  <p className="text-4xl font-bold mb-2">+47.3%</p>
-                  <div className="flex items-center gap-1 text-xs text-green-500">
-                    <ArrowUpRight className="w-3 h-3" />
-                    <span>+5.2% vs last month</span>
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  className="col-span-2 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-2xl p-6 border border-border/50 hover:border-blue-500/50 transition-all backdrop-blur-sm"
-                >
-                  <Activity className="w-8 h-8 text-blue-500 mb-3" />
-                  <p className="text-sm text-muted-foreground mb-1">Active Portfolios</p>
-                  <p className="text-4xl font-bold mb-2">247</p>
-                  <div className="flex items-center gap-1 text-xs text-blue-500">
-                    <Users className="w-3 h-3" />
-                    <span>18 new this week</span>
-                  </div>
-                </motion.div>
-
-                {/* AI Insights */}
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  className="col-span-3 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-2xl p-6 border border-border/50 hover:border-purple-500/50 transition-all backdrop-blur-sm"
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                      <Brain className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-medium">AI Insights</h3>
-                      <p className="text-xs text-muted-foreground">Updated 2 min ago</p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-foreground/80 leading-relaxed">
-                    Portfolio shows strong momentum. AI detected 3 optimization opportunities worth
-                    <span className="font-bold text-green-500"> +$127K potential gain</span>. Recommend rebalancing tech sector allocation.
-                  </p>
-                  <Button size="sm" variant="outline" className="mt-4 gap-2">
-                    View Details
-                    <ChevronRight className="w-3 h-3" />
-                  </Button>
-                </motion.div>
-
-                {/* Recent Activity */}
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  className="col-span-3 bg-gradient-to-br from-orange-500/10 to-red-500/10 rounded-2xl p-6 border border-border/50 hover:border-orange-500/50 transition-all backdrop-blur-sm"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-medium">Recent Activity</h3>
-                    <Bell className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-3">
-                    {[
-                      { icon: CheckCircle2, text: 'Q4 report generated', time: '2m ago', color: 'text-green-500' },
-                      { icon: Zap, text: 'Workflow automation completed', time: '15m ago', color: 'text-yellow-500' },
-                      { icon: Users, text: '3 new team members added', time: '1h ago', color: 'text-blue-500' },
-                    ].map((activity, i) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <activity.icon className={`w-4 h-4 ${activity.color}`} />
-                        <div className="flex-1">
-                          <p className="text-sm">{activity.text}</p>
-                          <p className="text-xs text-muted-foreground">{activity.time}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              </div>
+          {/* Trust Indicators */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="flex items-center justify-center gap-8 mt-12 text-xs text-muted-foreground"
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-500" />
+              <span>Free to start</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Bot className="w-4 h-4 text-blue-500" />
+              <span>Claude 3.5 Sonnet</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Gauge className="w-4 h-4 text-orange-500" />
+              <span>Real-time streaming</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-purple-500" />
+              <span>Enterprise security</span>
             </div>
           </motion.div>
         </div>
       </motion.section>
 
-      {/* Social Proof Bar */}
-      <section className="py-12 border-y border-border bg-muted/30">
+      {/* Live Demo Section */}
+      <DemoSection id="demo" />
+
+      {/* Features Grid */}
+      <section id="features" className="py-20">
         <div className="max-w-7xl mx-auto px-6">
-          <p className="text-center text-sm text-muted-foreground mb-8">
-            Trusted by leading financial institutions worldwide
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-8 items-center">
-            {['Goldman Sachs', 'JP Morgan', 'BlackRock', 'Vanguard', 'Fidelity', 'Morgan Stanley'].map((company, i) => (
-              <div key={i} className="text-center">
-                <p className="text-lg font-bold text-muted-foreground/50">{company}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Interactive Feature Showcase */}
-      <section id="features" className="py-16 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent" />
-
-        <div className="max-w-7xl mx-auto px-6 relative">
           <div className="text-center mb-12">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/20 rounded-full mb-6"
-            >
-              <Cpu className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-primary">Platform Features</span>
-            </motion.div>
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
-              The complete platform for
-              <br />
-              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                financial intelligence
+            <Badge variant="outline" className="mb-6">
+              <Layers className="w-3 h-3 mr-2" />
+              Platform Features
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4">
+              Everything You Need for{' '}
+              <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                Financial Intelligence
               </span>
             </h2>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Everything you need to analyze, automate, and scale your financial operations
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Built by developers, for developers. API-first with powerful integrations.
             </p>
           </div>
 
-          {/* Feature Tabs */}
-          <div className="flex flex-wrap justify-center gap-3 mb-12">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, index) => (
-              <button
+              <motion.div
                 key={index}
-                onClick={() => setSelectedFeature(index)}
-                className={`px-6 py-3 rounded-xl font-medium transition-all ${
-                  selectedFeature === index
-                    ? 'bg-primary text-primary-foreground shadow-lg'
-                    : 'bg-background border border-border text-muted-foreground hover:text-foreground hover:border-primary/50'
-                }`}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.1 }}
+                onMouseEnter={() => setHoveredFeature(index)}
+                onMouseLeave={() => setHoveredFeature(null)}
               >
-                <div className="flex items-center gap-2">
-                  <feature.icon className="w-4 h-4" />
-                  <span>{feature.title}</span>
-                </div>
-              </button>
+                <Card className={cn(
+                  "h-full border-2 transition-all duration-300",
+                  hoveredFeature === index ? "border-blue-500 shadow-xl shadow-blue-500/20 scale-105" : "border-border hover:border-border/80"
+                )}>
+                  <CardContent className="p-6">
+                    <div className={cn(
+                      "w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center mb-4",
+                      feature.color
+                    )}>
+                      <feature.icon className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                    <p className="text-sm text-muted-foreground mb-4">{feature.description}</p>
+                    <div className="flex items-center justify-between">
+                      <Badge variant="secondary">{feature.demo}</Badge>
+                      <ArrowUpRight className={cn(
+                        "w-4 h-4 transition-transform",
+                        hoveredFeature === index ? "translate-x-1 -translate-y-1" : ""
+                      )} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
           </div>
-
-          {/* Feature Content */}
-          <motion.div
-            key={selectedFeature}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="grid md:grid-cols-2 gap-12 items-center"
-          >
-            {/* Left: Content */}
-            <div>
-              {(() => {
-                const FeatureIcon = features[selectedFeature].icon;
-                return (
-                  <div className={`inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br ${features[selectedFeature].color} mb-6`}>
-                    <FeatureIcon className="w-8 h-8 text-white" strokeWidth={2.5} />
-                  </div>
-                );
-              })()}
-
-              <h3 className="text-4xl font-bold mb-4">{features[selectedFeature].title}</h3>
-              <p className="text-lg text-muted-foreground mb-6 leading-relaxed">
-                {features[selectedFeature].description}
-              </p>
-
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                {features[selectedFeature].benefits.map((benefit, i) => (
-                  <div key={i} className="flex items-center gap-3 p-4 bg-muted/50 rounded-xl">
-                    <CheckCircle2 className="w-5 h-5 text-primary flex-shrink-0" />
-                    <span className="text-sm font-medium">{benefit}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-4">
-                <Button size="lg" className="gap-2">
-                  Try it now
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-                <Button size="lg" variant="outline" className="gap-2">
-                  <Code className="w-4 h-4" />
-                  View Docs
-                </Button>
-              </div>
-            </div>
-
-            {/* Right: Demo Card */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5 }}
-              className={`relative bg-gradient-to-br ${features[selectedFeature].color} p-1 rounded-3xl shadow-2xl`}
-            >
-              <div className="bg-background rounded-[calc(1.5rem-4px)] p-8">
-                <div className="text-center mb-8">
-                  {(() => {
-                    const DemoIcon = features[selectedFeature].demoIcon;
-                    return <DemoIcon className="w-20 h-20 mx-auto mb-4 text-primary" strokeWidth={1.5} />;
-                  })()}
-                  <h4 className="text-2xl font-bold mb-2">{features[selectedFeature].title}</h4>
-                  <p className="text-sm text-muted-foreground">Live Performance Metrics</p>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  {Object.entries(features[selectedFeature].metrics).map(([key, value], i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      className="text-center p-4 bg-muted/50 rounded-xl"
-                    >
-                      <p className="text-2xl font-bold mb-1">{value}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{key}</p>
-                    </motion.div>
-                  ))}
-                </div>
-
-                <div className="mt-6 p-4 bg-primary/10 rounded-xl">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-sm font-medium">Live Status</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    System operating at optimal performance • Last updated just now
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
         </div>
       </section>
 
-      {/* Case Studies */}
-      <section id="customers" className="py-16 bg-muted/30">
+      {/* Use Cases */}
+      <section id="use-cases" className="py-20 bg-muted/30">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">
-              Customer{' '}
-              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                success stories
+            <Badge variant="outline" className="mb-6">
+              <Target className="w-3 h-3 mr-2" />
+              Use Cases
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4">
+              Built for{' '}
+              <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                Real Work
               </span>
             </h2>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              See how leading organizations are transforming their operations with AssetWorks
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              From research to risk assessment, AssetWorks handles it all
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {caseStudies.map((study, index) => (
+          <div className="grid md:grid-cols-2 gap-6">
+            {useCases.map((useCase, index) => (
               <motion.div
                 key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, x: index % 2 === 0 ? -20 : 20 }}
+                whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.1 }}
               >
-                <Card className="border-border hover:border-primary/50 transition-all h-full hover:shadow-lg group">
+                <Card className="h-full border-2 hover:border-blue-500/50 transition-all">
                   <CardContent className="p-8">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center">
-                        <study.icon className="w-8 h-8 text-white" strokeWidth={2} />
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 flex items-center justify-center flex-shrink-0">
+                        <useCase.icon className="w-6 h-6 text-blue-600" />
                       </div>
-                      <div>
-                        <h3 className="text-xl font-bold">{study.company}</h3>
-                        <p className="text-sm text-muted-foreground">{study.industry}</p>
-                      </div>
-                    </div>
-
-                    <div className="mb-6">
-                      <h4 className="text-sm font-semibold text-primary mb-2">Challenge</h4>
-                      <p className="text-sm text-muted-foreground mb-4">{study.challenge}</p>
-
-                      <h4 className="text-sm font-semibold text-primary mb-2">Solution</h4>
-                      <p className="text-sm text-muted-foreground">{study.solution}</p>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3 mb-6">
-                      {study.results.map((result, i) => (
-                        <div key={i} className="text-center p-3 bg-muted rounded-xl">
-                          <result.icon className="w-5 h-5 text-primary mx-auto mb-2" />
-                          <p className="text-xl font-bold mb-1">{result.value}</p>
-                          <p className="text-xs text-muted-foreground">{result.metric}</p>
+                      <div className="flex-1">
+                        <h3 className="text-xl font-semibold mb-2">{useCase.title}</h3>
+                        <p className="text-muted-foreground mb-4">{useCase.description}</p>
+                        <div className="p-3 bg-muted rounded-lg">
+                          <p className="text-sm font-mono">
+                            <span className="text-muted-foreground">$</span> ask "{useCase.example}"
+                          </p>
                         </div>
-                      ))}
-                    </div>
-
-                    <div className="p-4 bg-primary/5 rounded-xl border-l-4 border-primary">
-                      <p className="text-sm italic mb-3">"{study.quote}"</p>
-                      <p className="text-xs font-semibold">{study.author}</p>
-                    </div>
-
-                    <Button variant="outline" className="w-full mt-6 gap-2 group-hover:bg-primary group-hover:text-primary-foreground transition-all">
-                      Read Full Case Study
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Comparison Table */}
-      <section className="py-16">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">
-              How we{' '}
-              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                compare
-              </span>
-            </h2>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              See why leading organizations choose AssetWorks over alternatives
-            </p>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full border border-border rounded-2xl overflow-hidden">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">Feature</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
-                        <TrendingUp className="w-4 h-4 text-white" />
                       </div>
-                      <span>AssetWorks</span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-muted-foreground">Competitor A</th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-muted-foreground">Competitor B</th>
-                </tr>
-              </thead>
-              <tbody>
-                {comparisonFeatures.map((feature, index) => (
-                  <tr key={index} className="border-t border-border hover:bg-muted/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium">{feature.name}</td>
-                    <td className="px-6 py-4 text-center">
-                      {feature.assetworks ? (
-                        <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
-                      ) : (
-                        <X className="w-5 h-5 text-muted-foreground/30 mx-auto" />
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {feature.competitor1 ? (
-                        <CheckCircle2 className="w-5 h-5 text-muted-foreground/50 mx-auto" />
-                      ) : (
-                        <X className="w-5 h-5 text-muted-foreground/30 mx-auto" />
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {feature.competitor2 ? (
-                        <CheckCircle2 className="w-5 h-5 text-muted-foreground/50 mx-auto" />
-                      ) : (
-                        <X className="w-5 h-5 text-muted-foreground/30 mx-auto" />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="text-center mt-12">
-            <Button size="lg" className="gap-2">
-              Start Free Trial
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing */}
-      <section id="pricing" className="py-16 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">
-              Simple,{' '}
-              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                transparent pricing
-              </span>
-            </h2>
-            <p className="text-xl text-muted-foreground mb-8">
-              Choose the plan that's right for your organization
-            </p>
-
-            {/* Pricing Toggle */}
-            <div className="inline-flex items-center gap-4 p-1 bg-background rounded-full border border-border">
-              <button
-                onClick={() => setActivePricingTab('monthly')}
-                className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${
-                  activePricingTab === 'monthly'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setActivePricingTab('annual')}
-                className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${
-                  activePricingTab === 'annual'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Annual
-                <span className="ml-2 px-2 py-1 bg-green-500/20 text-green-500 text-xs rounded-full">
-                  Save 20%
-                </span>
-              </button>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {pricingPlans.map((plan, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-                className={`relative ${plan.popular ? 'md:-mt-8' : ''}`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-5 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-primary to-secondary text-white text-sm font-semibold rounded-full shadow-lg">
-                    Most Popular
-                  </div>
-                )}
-
-                <Card className={`border-2 h-full ${
-                  plan.popular
-                    ? 'border-primary shadow-xl shadow-primary/20'
-                    : 'border-border hover:border-primary/50'
-                } transition-all`}>
-                  <CardContent className="p-8">
-                    <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                    <p className="text-sm text-muted-foreground mb-6">{plan.description}</p>
-
-                    <div className="mb-6">
-                      {plan.monthlyPrice ? (
-                        <>
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-5xl font-bold">
-                              ${activePricingTab === 'monthly' ? plan.monthlyPrice : Math.round(plan.annualPrice! / 12)}
-                            </span>
-                            <span className="text-muted-foreground">/month</span>
-                          </div>
-                          {activePricingTab === 'annual' && (
-                            <p className="text-sm text-muted-foreground mt-2">
-                              ${plan.annualPrice} billed annually
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <div className="text-4xl font-bold mb-2">Custom</div>
-                      )}
-                    </div>
-
-                    <Button
-                      size="lg"
-                      className={`w-full mb-6 ${
-                        plan.popular
-                          ? ''
-                          : 'bg-background text-foreground border-2 border-border hover:bg-muted'
-                      }`}
-                    >
-                      {plan.cta}
-                    </Button>
-
-                    <div className="space-y-3">
-                      {plan.features.map((feature, i) => (
-                        <div key={i} className="flex items-center gap-3">
-                          {feature.included ? (
-                            <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-                          ) : (
-                            <X className="w-5 h-5 text-muted-foreground/30 flex-shrink-0" />
-                          )}
-                          <span className={`text-sm ${
-                            feature.included ? '' : 'text-muted-foreground'
-                          }`}>
-                            {feature.name}
-                          </span>
-                        </div>
-                      ))}
                     </div>
                   </CardContent>
                 </Card>
               </motion.div>
             ))}
           </div>
-
-          <div className="text-center mt-12">
-            <p className="text-sm text-muted-foreground mb-4">
-              All plans include 14-day free trial • No credit card required • Cancel anytime
-            </p>
-            <Button variant="outline" size="lg" className="gap-2">
-              <MessageSquare className="w-4 h-4" />
-              Talk to Sales
-            </Button>
-          </div>
         </div>
       </section>
 
-      {/* Integrations */}
-      <section className="py-16">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">
-              Integrates with{' '}
-              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                everything
-              </span>
-            </h2>
-            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Connect AssetWorks to 100+ popular services and automate your entire workflow
-            </p>
-          </div>
+      {/* CTA Section */}
+      <section className="py-20 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-indigo-500/10 to-purple-500/10" />
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">
-            {integrations.map((integration, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.05 }}
-                whileHover={{ scale: 1.05 }}
-              >
-                <Card className="border-border hover:border-primary/50 transition-all hover:shadow-lg group">
-                  <CardContent className="p-6 text-center">
-                    <div className="w-12 h-12 mx-auto mb-3 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-xl flex items-center justify-center">
-                      <integration.icon className="w-6 h-6 text-primary" strokeWidth={2} />
-                    </div>
-                    <h4 className="font-semibold mb-1 group-hover:text-primary transition-colors">{integration.name}</h4>
-                    <p className="text-xs text-muted-foreground mb-2">{integration.category}</p>
-                    <p className="text-xs text-muted-foreground">{integration.description}</p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="text-center">
-            <Button size="lg" variant="outline" className="gap-2">
-              <Package className="w-5 h-5" />
-              View All 100+ Integrations
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section className="py-16 bg-muted/30">
-        <div className="max-w-4xl mx-auto px-6">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6">
-              Frequently asked{' '}
-              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                questions
-              </span>
-            </h2>
-            <p className="text-xl text-muted-foreground">
-              Everything you need to know about AssetWorks
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {faqs.map((faq, index) => (
-              <motion.details
-                key={index}
-                initial={{ opacity: 0, y: 10 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.05 }}
-                className="group bg-background border border-border rounded-2xl p-6 hover:border-primary/50 transition-all"
-              >
-                <summary className="flex items-center justify-between cursor-pointer text-lg font-semibold list-none">
-                  <span>{faq.question}</span>
-                  <ChevronRight className="w-5 h-5 text-muted-foreground group-open:rotate-90 transition-transform" />
-                </summary>
-                <p className="mt-4 text-muted-foreground leading-relaxed">
-                  {faq.answer}
-                </p>
-              </motion.details>
-            ))}
-          </div>
-
-          <div className="text-center mt-12">
-            <p className="text-muted-foreground mb-4">Still have questions?</p>
-            <Button size="lg" variant="outline" className="gap-2">
-              <MessageSquare className="w-5 h-5" />
-              Contact Support
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Final CTA */}
-      <section className="py-16 relative overflow-hidden">
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-secondary/20 to-primary/20" />
-          <div
-            className="absolute inset-0 opacity-[0.03]"
-            style={{
-              backgroundImage: `
-                linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px),
-                linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px)
-              `,
-              backgroundSize: '80px 80px',
-            }}
-          />
-        </div>
-
-        <div className="max-w-5xl mx-auto px-6 text-center relative">
+        <div className="max-w-4xl mx-auto px-6 text-center relative">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
-              Ready to transform your
-              <br />
-              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                financial operations?
+            <Badge variant="outline" className="mb-6">
+              <Sparkles className="w-3 h-3 mr-2" />
+              Get Started
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-bold mb-6">
+              Ready to Transform Your{' '}
+              <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                Financial Analysis?
               </span>
             </h2>
-            <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
-              Join 500,000+ financial professionals using AssetWorks to automate workflows,
-              generate insights, and scale effortlessly
+            <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
+              Join thousands of analysts using AI to generate insights faster and smarter
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
               <Link href="/financial-playground">
-                <Button size="lg" className="h-16 px-10 text-lg gap-3 shadow-xl shadow-primary/25">
-                  <Rocket className="w-6 h-6" />
-                  Start Free Trial
+                <Button size="lg" className="h-14 px-10 text-lg gap-3 shadow-lg shadow-blue-600/25">
+                  <Sparkles className="w-5 h-5" />
+                  Try Financial Playground
                   <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="h-16 px-10 text-lg gap-3 backdrop-blur-sm">
-                <Download className="w-6 h-6" />
-                Download Whitepaper
-              </Button>
               <Link href="/dashboard">
-                <Button size="lg" variant="ghost" className="h-16 px-10 text-lg gap-3">
-                  <Play className="w-6 h-6" />
-                  View Demo
+                <Button size="lg" variant="outline" className="h-14 px-10 text-lg gap-3">
+                  <BarChart3 className="w-5 h-5" />
+                  Explore Dashboard
                 </Button>
               </Link>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
                 <span>No credit card required</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
-                <span>14-day free trial</span>
+                <span>Free tier available</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
-                <span>Cancel anytime</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                <span>SOC2 Type II certified</span>
+                <span>API included</span>
               </div>
             </div>
           </motion.div>
@@ -1195,99 +570,87 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border bg-muted/30">
-        <div className="max-w-7xl mx-auto px-6 py-16">
-          <div className="grid md:grid-cols-5 gap-12 mb-12">
-            <div className="md:col-span-2">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center">
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <div className="grid md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
                   <TrendingUp className="w-6 h-6 text-white" />
                 </div>
-                <span className="text-2xl font-bold">AssetWorks</span>
+                <span className="text-xl font-bold">AssetWorks</span>
               </div>
-              <p className="text-muted-foreground mb-6 leading-relaxed">
-                Enterprise-grade financial intelligence platform powered by AI.
-                Transform your data into actionable insights in milliseconds.
+              <p className="text-sm text-muted-foreground">
+                AI-powered financial intelligence platform
               </p>
-              <div className="flex gap-4">
-                <Button size="sm" variant="outline" className="w-10 h-10 p-0">
-                  <GitBranch className="w-4 h-4" />
-                </Button>
-                <Button size="sm" variant="outline" className="w-10 h-10 p-0">
-                  <MessageSquare className="w-4 h-4" />
-                </Button>
-                <Button size="sm" variant="outline" className="w-10 h-10 p-0">
-                  <Hash className="w-4 h-4" />
-                </Button>
+            </div>
+
+            <div>
+              <h4 className="font-semibold mb-3">Product</h4>
+              <div className="space-y-2">
+                <Link href="/financial-playground" className="block text-sm text-muted-foreground hover:text-foreground">
+                  Financial Playground
+                </Link>
+                <Link href="/dashboard" className="block text-sm text-muted-foreground hover:text-foreground">
+                  Dashboard
+                </Link>
+                <Link href="/docs" className="block text-sm text-muted-foreground hover:text-foreground">
+                  Documentation
+                </Link>
+                <Link href="/api" className="block text-sm text-muted-foreground hover:text-foreground">
+                  API Reference
+                </Link>
               </div>
             </div>
 
             <div>
-              <h4 className="font-semibold mb-4">Product</h4>
-              <div className="space-y-3">
-                <Link href="/features" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Features</Link>
-                <Link href="/pricing" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
-                <Link href="/integrations" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Integrations</Link>
-                <Link href="/changelog" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Changelog</Link>
-                <Link href="/roadmap" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Roadmap</Link>
+              <h4 className="font-semibold mb-3">Resources</h4>
+              <div className="space-y-2">
+                <Link href="/blog" className="block text-sm text-muted-foreground hover:text-foreground">
+                  Blog
+                </Link>
+                <Link href="/changelog" className="block text-sm text-muted-foreground hover:text-foreground">
+                  Changelog
+                </Link>
+                <Link href="/roadmap" className="block text-sm text-muted-foreground hover:text-foreground">
+                  Roadmap
+                </Link>
+                <Link href="/support" className="block text-sm text-muted-foreground hover:text-foreground">
+                  Support
+                </Link>
               </div>
             </div>
 
             <div>
-              <h4 className="font-semibold mb-4">Company</h4>
-              <div className="space-y-3">
-                <Link href="/about" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">About Us</Link>
-                <Link href="/blog" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Blog</Link>
-                <Link href="/careers" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Careers</Link>
-                <Link href="/contact" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Contact</Link>
-                <Link href="/partners" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Partners</Link>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-semibold mb-4">Resources</h4>
-              <div className="space-y-3">
-                <Link href="/docs" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Documentation</Link>
-                <Link href="/api" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">API Reference</Link>
-                <Link href="/support" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Support</Link>
-                <Link href="/status" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">System Status</Link>
-                <Link href="/community" className="block text-sm text-muted-foreground hover:text-foreground transition-colors">Community</Link>
+              <h4 className="font-semibold mb-3">Connect</h4>
+              <div className="flex gap-3">
+                <Button size="sm" variant="outline" className="w-10 h-10 p-0">
+                  <Github className="w-4 h-4" />
+                </Button>
+                <Button size="sm" variant="outline" className="w-10 h-10 p-0">
+                  <Twitter className="w-4 h-4" />
+                </Button>
+                <Button size="sm" variant="outline" className="w-10 h-10 p-0">
+                  <Linkedin className="w-4 h-4" />
+                </Button>
               </div>
             </div>
           </div>
 
-          <div className="pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-6">
-              <p className="text-sm text-muted-foreground">
-                © 2025 AssetWorks. All rights reserved.
-              </p>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Shield className="w-3 h-3 text-green-500" />
-                <span>SOC2 Type II Certified</span>
-              </div>
-            </div>
+          <div className="pt-8 border-t border-border flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              © 2024 AssetWorks. All rights reserved.
+            </p>
             <div className="flex gap-6">
-              <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Privacy Policy</Link>
-              <Link href="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Terms of Service</Link>
-              <Link href="/security" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Security</Link>
-              <Link href="/cookies" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Cookie Policy</Link>
+              <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground">
+                Privacy
+              </Link>
+              <Link href="/terms" className="text-sm text-muted-foreground hover:text-foreground">
+                Terms
+              </Link>
             </div>
           </div>
         </div>
       </footer>
-
-      <style jsx global>{`
-        @keyframes gradient {
-          0%, 100% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-        }
-        .animate-gradient {
-          animation: gradient 3s ease infinite;
-        }
-      `}</style>
     </div>
   );
 }

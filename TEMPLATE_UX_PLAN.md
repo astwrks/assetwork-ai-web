@@ -4,7 +4,7 @@
 
 ### Issues Identified:
 1. **No Template API Integration**
-   - Templates are hardcoded in the UI (financial-playground-v2/page.tsx:1711-1735)
+   - Templates are hardcoded in the UI (financial-playground/page.tsx:1711-1735)
    - Template model exists in database but is unused
    - No way to manage, create, or fetch real templates
 
@@ -318,7 +318,7 @@ Visual confirmation → Input ready
 ### Week 2: Core UX
 - [ ] Build TemplateCard component
 - [ ] Build TemplateDetailDialog
-- [ ] Integrate with financial-playground-v2
+- [ ] Integrate with financial-playground
 - [ ] Fix flickering issue
 
 ### Week 3: Premium Features

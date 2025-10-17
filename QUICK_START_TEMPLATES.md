@@ -4,7 +4,7 @@
 
 ### Step 1: Open the Application
 ```
-🌐 http://localhost:3001/financial-playground-v2
+🌐 http://localhost:3001/financial-playground
 ```
 
 ### Step 2: Click the Templates Button
@@ -128,15 +128,15 @@ Look for the **Templates** icon (📄) in the compose bar at the bottom of the s
 ```bash
 # Re-seed the database:
 cd /Users/Victor/Projects/AssetWorks/assetworks-webapp
-MONGODB_URI=mongodb://localhost:27017/assetworks npx tsx scripts/seed-templates.ts
+npx prisma db seed
 ```
 
 ### API Errors?
 ```bash
-# Check MongoDB is running:
-mongosh mongodb://localhost:27017/assetworks
+# Check database connection:
+npx prisma studio
 
-# If connection fails, start MongoDB
+# If connection fails, check DATABASE_URL in .env.local
 ```
 
 ### App Not Loading?
@@ -242,4 +242,4 @@ After testing:
 
 ---
 
-**Ready to test? Open http://localhost:3001/financial-playground-v2 and try it out!** 🚀
+**Ready to test? Open http://localhost:3001/financial-playground and try it out!** 🚀

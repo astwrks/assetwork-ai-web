@@ -3,7 +3,7 @@
  * Tests API keys for various providers and returns detailed error information
  */
 
-import { decryptApiKey } from '@/lib/db/models/ApiKey';
+import { decryptApiKey } from '@/lib/utils/encryption';
 
 interface ConnectionTestResult {
   success: boolean;
@@ -343,17 +343,11 @@ export class ApiKeyConnectionTestService {
    */
   private static async testAnthropic(apiKey: string): Promise<ConnectionTestResult> {
     try {
-      if (!apiKey || !apiKey.startsWith('sk-ant-')) {
-        return {
-          success: false,
-          status: 'error',
-          message: 'Invalid API key format',
-          errorType: 'invalid_format',
-          errorDetails: 'Anthropic API keys must start with "sk-ant-"',
-          suggestedFix: 'Get a valid API key from Anthropic Console',
-          providerDocUrl: 'https://console.anthropic.com/settings/keys',
-        };
-      }
+      // Skip format validation - let the API tell us what's wrong
+      const trimmedKey = apiKey?.trim() || '';
+
+      console.error('[Anthropic Test] Key length:', trimmedKey.length);
+      console.error('[Anthropic Test] Key prefix:', trimmedKey.substring(0, 15));
 
       // Test with a minimal message
       const response = await fetch(
@@ -361,7 +355,7 @@ export class ApiKeyConnectionTestService {
         {
           method: 'POST',
           headers: {
-            'x-api-key': apiKey,
+            'x-api-key': trimmedKey,
             'anthropic-version': '2023-06-01',
             'content-type': 'application/json',
           },
@@ -374,13 +368,26 @@ export class ApiKeyConnectionTestService {
         }
       );
 
+      console.error('[Anthropic Test] Response status:', response.status);
+
+      // Get response data for all non-success cases
+      let data: any = null;
+      try {
+        if (!response.ok) {
+          data = await response.json();
+          console.error('[Anthropic Test] Error response:', JSON.stringify(data));
+        }
+      } catch (e) {
+        console.error('[Anthropic Test] Could not parse error response');
+      }
+
       if (response.status === 401) {
         return {
           success: false,
           status: 'error',
           message: 'Invalid API key',
           errorType: 'auth',
-          errorDetails: 'API key authentication failed',
+          errorDetails: data?.error?.message || data?.message || 'API key authentication failed',
           suggestedFix: 'Verify your API key at Anthropic Console',
           providerDocUrl: 'https://console.anthropic.com/settings/keys',
         };
@@ -392,7 +399,7 @@ export class ApiKeyConnectionTestService {
           status: 'error',
           message: 'Rate limit exceeded',
           errorType: 'rate_limit',
-          errorDetails: 'Too many requests',
+          errorDetails: data?.error?.message || 'Too many requests',
           suggestedFix: 'Wait a moment or check your usage limits',
           providerDocUrl: 'https://console.anthropic.com/settings/limits',
         };
@@ -406,13 +413,12 @@ export class ApiKeyConnectionTestService {
         };
       }
 
-      const data = await response.json();
       return {
         success: false,
         status: 'error',
         message: 'API request failed',
         errorType: 'unknown',
-        errorDetails: data.error?.message || `HTTP ${response.status}`,
+        errorDetails: data?.error?.message || data?.message || `HTTP ${response.status}`,
       };
     } catch (error: any) {
       return this.handleNetworkError('Anthropic', error);
@@ -532,9 +538,26 @@ export class ApiKeyConnectionTestService {
    */
   private static async decryptKey(encryptedKey: string): Promise<string> {
     try {
-      return decryptApiKey(encryptedKey);
+      if (!encryptedKey || encryptedKey.trim() === '') {
+        console.error('[Decryption] Empty or invalid encrypted key provided');
+        return '';
+      }
+
+      console.error('[Decryption] Starting decryption, encrypted length:', encryptedKey.length);
+      const decrypted = decryptApiKey(encryptedKey);
+
+      if (!decrypted || decrypted.trim() === '') {
+        console.error('[Decryption] Decryption returned empty string');
+        return '';
+      }
+
+      console.error('[Decryption] Success! Decrypted key length:', decrypted.length);
+      console.error('[Decryption] Decrypted key starts with:', decrypted.substring(0, 10));
+      return decrypted.trim();
     } catch (error) {
-      console.error('Failed to decrypt API key:', error);
+      console.error('[Decryption] Failed to decrypt API key:', error);
+      console.error('[Decryption] Encrypted key length:', encryptedKey?.length);
+      console.error('[Decryption] Encrypted key preview:', encryptedKey?.substring(0, 20));
       return '';
     }
   }

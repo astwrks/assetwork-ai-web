@@ -20,7 +20,7 @@ npm run dev
 
 ### 3. Quick System Check
 - **App**: http://localhost:3001
-- **Playground**: http://localhost:3001/financial-playground-v2
+- **Playground**: http://localhost:3001/financial-playground
 - **Prisma Studio**: http://localhost:5555 (if running)
 
 ---
@@ -84,7 +84,7 @@ components/entities/
 ## 🧪 Test the System
 
 ### Generate Test Report
-1. Go to: http://localhost:3001/financial-playground-v2
+1. Go to: http://localhost:3001/financial-playground
 2. Click "New Thread" or select existing thread
 3. Type: **"Write a report about top Indian retail companies: Trent, Titan, and Reliance Retail"**
 4. Wait for report to generate
@@ -93,8 +93,6 @@ components/entities/
 ### Expected Results
 ✅ Console logs show:
 ```
-Syncing MongoDB report 68ee... to Prisma...
-✅ Report synced to Prisma: 68ee...
 Processing entities for report 68ee...
 Extracted 5 entities from report
 Created new entity: Trent
@@ -139,9 +137,9 @@ Required in `.env.local`:
 # AI (Required for entity extraction)
 ANTHROPIC_API_KEY=sk-ant-api03-...
 
-# Database (Fixed with timeouts)
+# Database (PostgreSQL with connection pooling)
 DATABASE_URL=postgresql://...?connect_timeout=30&pool_timeout=30&pgbouncer=true
-MONGODB_URI=mongodb://localhost:27017/assetworks
+DIRECT_URL=postgresql://...?connect_timeout=30
 
 # Auth
 NEXTAUTH_SECRET=your-secret

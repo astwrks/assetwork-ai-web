@@ -9,18 +9,43 @@ import { prisma } from '@/lib/db/prisma';
 import { CacheService, CacheKeys, CacheTTL } from './redis.service';
 import { WebSocketService } from './websocket.service';
 import { nanoid } from 'nanoid';
+import { MockReportGenerationService } from './mock-report-generation.service';
 
-// Initialize Anthropic client with new API key
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
+// Lazy initialization of Anthropic client
+let anthropic: Anthropic | null = null;
+
+function getAnthropicClient(): Anthropic {
+  if (!anthropic) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+    }
+    anthropic = new Anthropic({ apiKey });
+    console.log('[Anthropic] Client initialized with API key length:', apiKey.length);
+  }
+  return anthropic;
+}
+
+// Check if we should use mock service
+function shouldUseMockService(): boolean {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const hasApiKey = !!process.env.ANTHROPIC_API_KEY;
+  const forceMock = process.env.USE_MOCK_AI === 'true';
+
+  return forceMock || (isDevelopment && !hasApiKey);
+}
 
 // Report generation schemas
 export const ReportOptionsSchema = z.object({
   prompt: z.string().min(10),
   systemPrompt: z.string().optional(),
   threadId: z.string().optional(),
-  model: z.enum(['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307']).default('claude-3-opus-20240229'),
+  model: z.enum([
+    'claude-3-5-sonnet-20241022',
+    'claude-3-opus-20240229',
+    'claude-3-sonnet-20240229',
+    'claude-3-haiku-20240307'
+  ]).default('claude-3-5-sonnet-20241022'),
   maxTokens: z.number().min(100).max(100000).default(8000),
   temperature: z.number().min(0).max(1).default(0.7),
   stream: z.boolean().default(true),
@@ -102,40 +127,112 @@ export class ReportGenerationService {
     userId: string,
     options: ReportOptions
   ): Promise<AsyncIterableIterator<any>> {
-    const validatedOptions = ReportOptionsSchema.parse(options);
-    const reportId = nanoid();
-    const threadId = validatedOptions.threadId || nanoid();
+    console.log('[Report Generation] Starting report generation');
+    console.log('[Report Generation] User ID:', userId);
+    console.log('[Report Generation] Options:', JSON.stringify(options, null, 2));
 
-    // Check cache for similar report
-    const cacheKey = CacheKeys.REPORT(`${userId}:${Buffer.from(validatedOptions.prompt).toString('base64').substring(0, 50)}`);
-    const cached = await CacheService.get(cacheKey);
-    if (cached && !validatedOptions.stream) {
-      return this.createAsyncIterator([cached]);
+    // Use mock service if appropriate
+    if (shouldUseMockService()) {
+      console.log('[Report Generation] Using mock service for development/testing');
+      return MockReportGenerationService.generateReport(userId, options);
     }
 
-    // Create report in database
-    const report = await prisma.reports.create({
-      data: {
-        id: reportId,
-        userId,
-        threadId,
-        title: validatedOptions.prompt.substring(0, 100),
-        description: validatedOptions.prompt,
-        htmlContent: '',
-        status: 'DRAFT',
-        metadata: {
-          model: validatedOptions.model,
-          temperature: validatedOptions.temperature,
-          generatedAt: new Date().toISOString(),
-        },
-      },
-    });
+    try {
+      const validatedOptions = ReportOptionsSchema.parse(options);
+      const reportId = nanoid();
+      const threadId = validatedOptions.threadId || nanoid();
 
-    // Generate report content
-    if (validatedOptions.stream) {
-      return this.streamReportGeneration(report.id, userId, validatedOptions);
-    } else {
-      return this.generateReportBatch(report.id, userId, validatedOptions);
+      console.log('[Report Generation] Validated options successfully');
+      console.log('[Report Generation] Report ID:', reportId);
+      console.log('[Report Generation] Thread ID:', threadId);
+
+      // Ensure user exists in database
+      console.log('[Report Generation] Checking if user exists...');
+      // Try to find by ID first, then by email
+      let user = await prisma.users.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        console.log('[Report Generation] User not found by ID, trying email...');
+        user = await prisma.users.findUnique({
+          where: { email: userId },
+        });
+      }
+
+      if (!user) {
+        console.log('[Report Generation] User not found, attempting to create...');
+        // Try to create user (userId might be email)
+        try {
+          user = await prisma.users.create({
+            data: {
+              id: nanoid(),
+              email: userId,
+              name: userId.split('@')[0] || 'User',
+              emailVerified: new Date(),
+              updatedAt: new Date(),
+            },
+          });
+          console.log('[Report Generation] User created successfully:', user.id);
+        } catch (createError) {
+          console.error('[Report Generation] Failed to create user:', createError);
+          throw new Error(`User not found and could not be created: ${userId}`);
+        }
+      } else {
+        console.log('[Report Generation] User found:', user.id);
+      }
+
+      // Check cache for similar report
+      console.log('[Report Generation] Checking cache...');
+      const cacheKey = CacheKeys.REPORT(`${user.id}:${Buffer.from(validatedOptions.prompt).toString('base64').substring(0, 50)}`);
+      const cached = await CacheService.get(cacheKey);
+      if (cached && !validatedOptions.stream) {
+        console.log('[Report Generation] Cache hit, returning cached report');
+        return this.createAsyncIterator([cached]);
+      }
+      console.log('[Report Generation] Cache miss, generating new report');
+
+      // Create report in database (playground_reports for Financial Playground)
+      console.log('[Report Generation] Creating report in database...');
+      const report = await prisma.playground_reports.create({
+        data: {
+          id: reportId,
+          threadId,
+          htmlContent: '',
+          model: validatedOptions.model,
+          prompt: validatedOptions.prompt,
+          metadata: {
+            temperature: validatedOptions.temperature,
+            generatedAt: new Date().toISOString(),
+          },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+      console.log('[Report Generation] Report created successfully:', report.id);
+
+      // Generate report content
+      console.log('[Report Generation] Starting content generation (stream:', validatedOptions.stream, ')');
+      if (validatedOptions.stream) {
+        return this.streamReportGeneration(report.id, user.id, validatedOptions);
+      } else {
+        return this.generateReportBatch(report.id, user.id, validatedOptions);
+      }
+    } catch (error) {
+      console.error('[Report Generation] Fatal error:', error);
+      console.error('[Report Generation] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        userId,
+        options,
+      });
+
+      // Return error iterator
+      return this.createAsyncIterator([{
+        type: 'error',
+        error: error instanceof Error ? error.message : 'Report generation failed',
+        details: error instanceof Error ? error.stack : undefined,
+      }]);
     }
   }
 
@@ -147,12 +244,19 @@ export class ReportGenerationService {
     userId: string,
     options: ReportOptions
   ): AsyncIterableIterator<any> {
+    console.log('[Stream Generation] Starting streaming generation');
+    console.log('[Stream Generation] Report ID:', reportId);
+    console.log('[Stream Generation] User ID:', userId);
+
     try {
       // Use provided system prompt or select based on content
+      console.log('[Stream Generation] Selecting system prompt...');
       const systemPrompt = options.systemPrompt || this.selectSystemPrompt(options.prompt);
+      console.log('[Stream Generation] System prompt selected:', systemPrompt.substring(0, 100) + '...');
 
       // Create streaming request
-      const stream = await anthropic.messages.create({
+      console.log('[Stream Generation] Creating Anthropic stream with model:', options.model);
+      const stream = await getAnthropicClient().messages.create({
         model: options.model,
         max_tokens: options.maxTokens,
         temperature: options.temperature,
@@ -165,6 +269,7 @@ export class ReportGenerationService {
         ],
         stream: true,
       });
+      console.log('[Stream Generation] Stream created successfully');
 
       let fullContent = '';
       let buffer = '';
@@ -233,17 +338,20 @@ export class ReportGenerationService {
       }
 
       // Update report in database
-      await prisma.reports.update({
+      await prisma.playground_reports.update({
         where: { id: reportId },
         data: {
           htmlContent: fullContent,
-          status: 'PUBLISHED',
+          totalTokens: fullContent.split(/\s+/).length, // Approximate token count
+          sections: sections as any,
+          insights: [] as any,
           metadata: {
             sections: sections.length,
             entities: entities.length,
             wordCount: fullContent.split(/\s+/).length,
             generatedAt: new Date().toISOString(),
           },
+          updatedAt: new Date(),
         },
       });
 
@@ -274,10 +382,18 @@ export class ReportGenerationService {
         },
       };
     } catch (error) {
-      console.error('Report generation error:', error);
+      console.error('[Stream Generation] Error occurred:', error);
+      console.error('[Stream Generation] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        reportId,
+        userId,
+      });
+
       yield {
         type: 'error',
         error: error instanceof Error ? error.message : 'Report generation failed',
+        details: error instanceof Error ? error.stack : undefined,
         reportId,
       };
     }
@@ -294,7 +410,7 @@ export class ReportGenerationService {
     try {
       const systemPrompt = options.systemPrompt || this.selectSystemPrompt(options.prompt);
 
-      const response = await anthropic.messages.create({
+      const response = await getAnthropicClient().messages.create({
         model: options.model,
         max_tokens: options.maxTokens,
         temperature: options.temperature,
@@ -314,11 +430,14 @@ export class ReportGenerationService {
       const entities = options.extractEntities ? await this.extractEntities(content) : [];
 
       // Update report
-      await prisma.reports.update({
+      await prisma.playground_reports.update({
         where: { id: reportId },
         data: {
           htmlContent: content,
-          status: 'PUBLISHED',
+          totalTokens: content.split(/\s+/).length,
+          sections: sections as any,
+          insights: [] as any,
+          updatedAt: new Date(),
         },
       });
 
@@ -441,7 +560,7 @@ export class ReportGenerationService {
    */
   private static async extractEntities(content: string): Promise<ExtractedEntity[]> {
     try {
-      const response = await anthropic.messages.create({
+      const response = await getAnthropicClient().messages.create({
         model: 'claude-3-haiku-20240307', // Use faster model for entity extraction
         max_tokens: 2000,
         temperature: 0.3,
@@ -525,9 +644,15 @@ Each entity should have: name, type (COMPANY/STOCK/PERSON/etc.), confidence (0-1
         },
       });
 
-      // Create entity mention
-      await prisma.entity_mentions.create({
-        data: {
+      // Create or update entity mention (avoid duplicates)
+      await prisma.entity_mentions.upsert({
+        where: {
+          entityId_reportId: {
+            entityId: dbEntity.id,
+            reportId,
+          },
+        },
+        create: {
           id: nanoid(),
           entityId: dbEntity.id,
           reportId,
@@ -536,6 +661,13 @@ Each entity should have: name, type (COMPANY/STOCK/PERSON/etc.), confidence (0-1
           relevance: entity.confidence,
           metadata: entity.metadata || {},
           createdAt: new Date(),
+        },
+        update: {
+          // Update sentiment and context if entity is mentioned again
+          sentiment: entity.sentiment,
+          context: entity.context,
+          relevance: entity.confidence,
+          metadata: entity.metadata || {},
         },
       });
     }

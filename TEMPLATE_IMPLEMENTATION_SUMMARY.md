@@ -68,7 +68,7 @@ All planned features have been successfully implemented for the enhanced Report 
   - Loading states during thread creation
 
 ### 5. **Main Page Integration**
-- **File**: `app/financial-playground-v2/page.tsx`
+- **File**: `app/financial-playground/page.tsx`
 - **Changes**:
   - Added template fetching with SWR
   - Added template state management
@@ -146,7 +146,7 @@ assetworks-webapp/
 ├── components/financial-playground/
 │   ├── TemplateCard.tsx                ✅ Template card UI
 │   └── TemplateDetailDialog.tsx        ✅ Detail view
-├── app/financial-playground-v2/
+├── app/financial-playground/
 │   └── page.tsx                        ✅ Main page integration
 ├── scripts/
 │   └── seed-templates.ts               ✅ Sample data
@@ -161,7 +161,7 @@ assetworks-webapp/
 ### 1. **Access the Application**
 ```bash
 # Application is running on:
-http://localhost:3001/financial-playground-v2
+http://localhost:3001/financial-playground
 ```
 
 ### 2. **Test Template Browsing**
@@ -409,7 +409,7 @@ interface TemplateDetailDialogProps {
 
 Before deploying to production:
 
-- [ ] Environment variables set (MONGODB_URI)
+- [ ] Environment variables set (DATABASE_URL, DIRECT_URL)
 - [ ] Database indexes created
 - [ ] Sample templates seeded
 - [ ] Subscription checking implemented
@@ -446,5 +446,5 @@ For issues or questions:
 
 **Status**: ✅ **READY FOR TESTING**
 
-The application is running at http://localhost:3001/financial-playground-v2
+The application is running at http://localhost:3001/financial-playground
 All features are implemented and ready for user testing!

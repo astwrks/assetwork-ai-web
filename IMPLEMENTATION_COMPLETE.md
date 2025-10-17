@@ -77,14 +77,14 @@ Template Components
 
 **Solution**: Removed redundant navigation, let `useEffect` handle URL updates
 
-**File**: `app/financial-playground-v2/page.tsx` line 947
+**File**: `app/financial-playground/page.tsx` line 947
 
 ```typescript
 // ✅ FIXED: Only set state, let useEffect handle navigation
 setActiveThread(data.thread);
 
 // ❌ REMOVED: This caused double navigation
-// router.replace(`/financial-playground-v2?thread=${data.thread._id}`);
+// router.replace(`/financial-playground?thread=${data.thread._id}`);
 ```
 
 ### State Flow
@@ -115,7 +115,7 @@ setActiveThread(data.thread);
 - ✅ `app/api/playground/templates/[templateId]/use/route.ts` - Use template API
 - ✅ `components/financial-playground/TemplateCard.tsx` - Card component
 - ✅ `components/financial-playground/TemplateDetailDialog.tsx` - Detail dialog
-- ✅ `app/financial-playground-v2/page.tsx` - Main page (FIXED FLICKERING)
+- ✅ `app/financial-playground/page.tsx` - Main page (FIXED FLICKERING)
 - ✅ `scripts/seed-templates.ts` - Seeding script
 
 ### Documentation
@@ -354,7 +354,7 @@ setActiveThread(data.thread);
 ### Application Access
 
 ```
-🌐 http://localhost:3001/financial-playground-v2
+🌐 http://localhost:3001/financial-playground
 ```
 
 ### Database Commands
@@ -444,7 +444,7 @@ mongosh mongodb://localhost:27017/assetworks --eval "db.templates.find({}, {name
 - **Documentation**: Complete
 - **Status**: Production Ready
 
-**Application Running**: http://localhost:3001/financial-playground-v2
+**Application Running**: http://localhost:3001/financial-playground
 
 ---
 

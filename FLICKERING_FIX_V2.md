@@ -245,7 +245,7 @@ When you click a thread, you should see (in console):
 ## 📝 Code Changes Summary
 
 ### Files Modified:
-- `/app/financial-playground-v2/page.tsx`
+- `/app/financial-playground/page.tsx`
 
 ### Lines Changed:
 - Added 2 refs for tracking (lines 239-240)

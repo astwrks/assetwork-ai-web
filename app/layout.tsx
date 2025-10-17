@@ -63,25 +63,68 @@ export default function RootLayout({
             {/* <AutoLogin /> */}
             {children}
             <Toaster
-              position="top-center"
+              position="bottom-right"
+              reverseOrder={false}
+              gutter={8}
+              containerStyle={{
+                bottom: 40,
+                right: 40,
+              }}
               toastOptions={{
                 duration: 4000,
                 style: {
-                  background: '#363636',
-                  color: '#fff',
+                  background: 'white',
+                  color: '#374151',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+                  border: '1px solid #e5e7eb',
+                  maxWidth: '420px',
                 },
                 success: {
                   duration: 3000,
+                  style: {
+                    background: 'white',
+                    color: '#065f46',
+                    border: '1px solid #d1fae5',
+                  },
                   iconTheme: {
                     primary: '#10b981',
-                    secondary: '#fff',
+                    secondary: 'white',
                   },
+                  icon: '✓',
                 },
                 error: {
-                  duration: 4000,
+                  duration: 5000,
+                  style: {
+                    background: 'white',
+                    color: '#991b1b',
+                    border: '1px solid #fee2e2',
+                  },
                   iconTheme: {
                     primary: '#ef4444',
-                    secondary: '#fff',
+                    secondary: 'white',
+                  },
+                  icon: '✕',
+                },
+                loading: {
+                  style: {
+                    background: 'white',
+                    color: '#1e3a8a',
+                    border: '1px solid #dbeafe',
+                  },
+                  iconTheme: {
+                    primary: '#3b82f6',
+                    secondary: 'white',
+                  },
+                },
+                blank: {
+                  style: {
+                    background: 'white',
+                    color: '#374151',
+                    border: '1px solid #e5e7eb',
                   },
                 },
               }}

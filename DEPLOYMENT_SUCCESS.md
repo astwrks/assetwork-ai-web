@@ -22,7 +22,7 @@ The site was experiencing 502 Bad Gateway errors due to MongoDB adapter issues. 
   - Thread-based conversation system
   - Persistent storage with MongoDB
 
-- ✅ **Financial Playground V2** (`/financial-playground-v2`)
+- ✅ **Financial Playground V2** (`/financial-playground`)
   - Enhanced UI with better editing experience
   - Section-level editing capabilities
   - Cancel edit functionality
@@ -136,7 +136,7 @@ If auto-deploy doesn't trigger:
 ### Core Features
 - [ ] `/settings` - Verify financial data integration tab shows connection status
 - [ ] `/financial-playground` - Test creating new financial reports
-- [ ] `/financial-playground-v2` - Test enhanced editing experience
+- [ ] `/financial-playground` - Test enhanced editing experience
 - [ ] `/financial-playground/settings` - Verify playground settings work
 - [ ] `/markets` - Check market overview page
 

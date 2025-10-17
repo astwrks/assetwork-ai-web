@@ -62,9 +62,9 @@ While the deploy is running, look for:
 - Error: "getaddrinfo ENOTFOUND"
 - Solution: Verify DATABASE_URL is correct
 
-**Issue 2: MongoDB Still Being Called**
-- Error: "MongoDB URI not configured"
-- Solution: The app might be trying to use MongoDB routes
+**Issue 2: PostgreSQL Still Being Called**
+- Error: "PostgreSQL URI not configured"
+- Solution: The app might be trying to use PostgreSQL routes
 - This shouldn't happen but let me know if you see this
 
 **Issue 3: Missing Environment Variable**

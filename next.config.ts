@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+import bundleAnalyzer from '@next/bundle-analyzer';
+
+// Configure bundle analyzer (enabled with ANALYZE=true environment variable)
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -19,6 +25,23 @@ const nextConfig: NextConfig = {
       fullUrl: false,
     },
   },
+  // Reduce compilation output
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
+  // Disable verbose webpack output
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.stats = 'errors-warnings';
+      config.infrastructureLogging = {
+        level: 'error',
+      };
+    }
+    return config;
+  },
 };
 
-export default nextConfig;
+// Export config wrapped with bundle analyzer
+export default withBundleAnalyzer(nextConfig);

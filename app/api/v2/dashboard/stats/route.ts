@@ -17,12 +17,14 @@ export async function GET(request: NextRequest) {
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
+    const userId = session.user.id;
+
     // Check cache
-    const cacheKey = `dashboard:stats:${session.user.email}`;
+    const cacheKey = `dashboard:stats:${userId}`;
     const cached = await CacheService.get(cacheKey);
     if (cached) {
       PerformanceMonitor.end(operationId, { cached: true });
@@ -33,9 +35,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get user
+    // Get user plan and credits
     const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
+      where: { id: userId },
       select: { id: true, plan: true, aiCredits: true },
     });
 
@@ -153,13 +155,11 @@ export async function GET(request: NextRequest) {
     await CacheService.set(cacheKey, stats, CacheTTL.SHORT);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
-      email: session.user.email,
+      userId: userId,
     });
 
     LoggingService.info('Dashboard stats fetched', {
-      userId: user.id,
-      email: session.user.email,
+      userId: userId,
       duration,
     });
 

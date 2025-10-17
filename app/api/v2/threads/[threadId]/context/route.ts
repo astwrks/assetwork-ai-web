@@ -14,25 +14,14 @@ export async function GET(
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'User not found' },
-        { status: 404 }
-      );
-    }
+    const userId = session.user.id;
 
     // Await params in Next.js 15
     const { threadId } = await params;
@@ -41,7 +30,7 @@ export async function GET(
     const thread = await prisma.threads.findFirst({
       where: {
         id: threadId,
-        userId: user.id,
+        userId: userId,
       },
       include: {
         messages: {

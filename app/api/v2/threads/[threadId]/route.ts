@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
+import { getServerSessionWithDev } from '@/lib/auth/dev-auth';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { CacheService, CacheTTL } from '@/lib/services/redis.service';
@@ -28,74 +30,102 @@ export async function GET(
   { params }: { params: Promise<{ threadId: string }> }
 ) {
   const operationId = `thread-get-${Date.now()}`;
+  const perfLog: Record<string, number> = {};
+  let t0 = Date.now();
+
   PerformanceMonitor.start(operationId);
 
   try {
-    // Authentication
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    // Await params in Next.js 15 (do this first to check for "new")
+    const { threadId } = await params;
+    perfLog.paramsAwait = Date.now() - t0;
+    t0 = Date.now();
+
+    // Handle special case for "new" thread WITHOUT requiring authentication
+    if (threadId === 'new') {
+      const duration = PerformanceMonitor.end(operationId);
+      return NextResponse.json({
+        success: true,
+        thread: null,
+        messages: [],
+        report: null,
+        meta: {
+          processingTime: duration,
+          isNew: true,
+        },
+      });
+    }
+
+    // Authentication - session already contains user.id from JWT callback
+    const session = await getServerSessionWithDev(authOptions);
+    perfLog.auth = Date.now() - t0;
+    t0 = Date.now();
+
+    if (!session?.user?.id) {
+      console.log('[Thread GET] No session found, throwing 401');
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
+    const userId = session.user.id;
 
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
-
-    // Await params in Next.js 15
-    const { threadId } = await params;
+    const searchParams = request.nextUrl.searchParams;
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
 
     // Check cache
-    const cacheKey = `thread:${threadId}:${user.id}`;
+    const cacheKey = `thread:${threadId}:${limit}:${offset}`;
     const cached = await CacheService.get(cacheKey);
+    perfLog.cacheCheck = Date.now() - t0;
+    t0 = Date.now();
+
     if (cached) {
+      console.log('🚀 Thread GET performance (cached):', perfLog);
       PerformanceMonitor.end(operationId, { cached: true });
       return NextResponse.json({
         success: true,
         ...cached,
-        meta: { cached: true },
+        meta: { cached: true, perfLog },
       });
     }
 
-    // Fetch thread with messages and reports
-    const thread = await prisma.threads.findFirst({
-      where: {
-        id: threadId,
-        userId: user.id,
-      },
-      include: {
-        messages: {
-          orderBy: { createdAt: 'asc' },
-          select: {
-            id: true,
-            role: true,
-            content: true,
-            metadata: true,
-            createdAt: true,
+    // Fetch thread and messages
+    const [thread, totalMessages] = await Promise.all([
+      prisma.threads.findUnique({
+        where: { id: threadId, userId: userId },
+        include: {
+          messages: {
+            orderBy: { createdAt: 'asc' },
+            take: limit,
+            skip: offset,
+            select: {
+              id: true,
+              role: true,
+              content: true,
+              createdAt: true,
+              metadata: true,
+            },
+          },
+          playground_reports: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              htmlContent: true,
+              sections: true,
+              insights: true,
+              metadata: true,
+              model: true,
+              totalTokens: true,
+              totalCost: true,
+              createdAt: true,
+            },
           },
         },
-        playground_reports: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            htmlContent: true,
-            sections: true,
-            insights: true,
-            metadata: true,
-            model: true,
-            totalTokens: true,
-            totalCost: true,
-            createdAt: true,
-          },
-        },
-      },
-    });
+      }),
+      prisma.messages.count({ where: { threadId } }),
+    ]);
+    perfLog.dbQuery = Date.now() - t0;
+    t0 = Date.now();
 
     if (!thread) {
       throw new AppErrors.NOT_FOUND('Thread not found');
@@ -120,6 +150,8 @@ export async function GET(
         },
       });
     }
+    perfLog.entityQuery = Date.now() - t0;
+    t0 = Date.now();
 
     // Extract metadata
     const metadata = (thread.metadata as any) || {};
@@ -171,20 +203,28 @@ export async function GET(
       } : null,
     };
 
+    perfLog.dataTransform = Date.now() - t0;
+    t0 = Date.now();
+
     // Cache result
     await CacheService.set(cacheKey, result, CacheTTL.SHORT);
+    perfLog.cacheSet = Date.now() - t0;
+    perfLog.total = Object.values(perfLog).reduce((a, b) => a + b, 0);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId,
       threadId,
     });
 
+    console.log('🚀 Thread GET performance:', perfLog);
+
     LoggingService.info('Thread fetched', {
-      userId: user.id,
+      userId,
       threadId,
       messageCount: thread.messages.length,
       hasReport: !!thread.playground_reports[0],
       duration,
+      perfLog,
     });
 
     return NextResponse.json({
@@ -192,6 +232,7 @@ export async function GET(
       ...result,
       meta: {
         processingTime: duration,
+        perfLog,
       },
     });
   } catch (error) {
@@ -231,21 +272,13 @@ export async function PATCH(
   PerformanceMonitor.start(operationId);
 
   try {
-    // Authentication
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    // Authentication - session already contains user.id from JWT callback
+    const session = await getServerSessionWithDev(authOptions);
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     // Await params in Next.js 15
     const { threadId } = await params;
@@ -258,7 +291,7 @@ export async function PATCH(
     const thread = await prisma.threads.findFirst({
       where: {
         id: threadId,
-        userId: user.id,
+        userId: userId,
       },
     });
 
@@ -287,24 +320,24 @@ export async function PATCH(
     });
 
     // Clear cache
-    await CacheService.del(`thread:${threadId}:${user.id}`);
-    await CacheService.clearPattern(`threads:${user.id}:*`);
+    await CacheService.delete(`thread:${threadId}:${userId}`);
+    await CacheService.clearPattern(`threads:${userId}:*`);
 
     // Broadcast via WebSocket if available
     if (typeof process !== 'undefined' && (global as any).io) {
-      (global as any).io.to(`user:${user.id}`).emit('thread:updated', {
+      (global as any).io.to(`user:${userId}`).emit('thread:updated', {
         threadId,
         changes: validated,
       });
     }
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId,
       threadId,
     });
 
     LoggingService.info('Thread updated', {
-      userId: user.id,
+      userId,
       threadId,
       changes: Object.keys(validated),
       duration,
@@ -376,21 +409,13 @@ export async function DELETE(
   PerformanceMonitor.start(operationId);
 
   try {
-    // Authentication
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    // Authentication - session already contains user.id from JWT callback
+    const session = await getServerSessionWithDev(authOptions);
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     // Await params in Next.js 15
     const { threadId } = await params;
@@ -399,7 +424,7 @@ export async function DELETE(
     const thread = await prisma.threads.findFirst({
       where: {
         id: threadId,
-        userId: user.id,
+        userId: userId,
       },
     });
 
@@ -413,23 +438,23 @@ export async function DELETE(
     });
 
     // Clear cache
-    await CacheService.del(`thread:${threadId}:${user.id}`);
-    await CacheService.clearPattern(`threads:${user.id}:*`);
+    await CacheService.delete(`thread:${threadId}:${userId}`);
+    await CacheService.clearPattern(`threads:${userId}:*`);
 
     // Broadcast via WebSocket if available
     if (typeof process !== 'undefined' && (global as any).io) {
-      (global as any).io.to(`user:${user.id}`).emit('thread:deleted', {
+      (global as any).io.to(`user:${userId}`).emit('thread:deleted', {
         threadId,
       });
     }
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId,
       threadId,
     });
 
     LoggingService.info('Thread deleted', {
-      userId: user.id,
+      userId,
       threadId,
       duration,
     });

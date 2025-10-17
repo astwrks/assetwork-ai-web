@@ -138,7 +138,7 @@ LEFT PANEL (Chat):         RIGHT PANEL (Reports):
 ## 🔧 Technical Changes
 
 ### Files Modified:
-1. `/app/financial-playground-v2/page.tsx` (2,164 lines)
+1. `/app/financial-playground/page.tsx` (2,164 lines)
 
 ### Key Code Changes:
 
@@ -188,7 +188,7 @@ cd /Users/Victor/Projects/AssetWorks/assetworks-webapp
 npm run dev
 
 # Open browser
-open http://localhost:3001/financial-playground-v2
+open http://localhost:3001/financial-playground
 ```
 
 **Verify:**

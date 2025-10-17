@@ -7,10 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -25,13 +25,11 @@ import {
   CreditCard,
   Key,
   Palette,
-  Globe,
   Moon,
   Sun,
   Monitor,
   Settings,
   Check,
-  AlertCircle,
   Plus,
   Trash2,
   Copy,
@@ -40,23 +38,54 @@ import {
   DollarSign,
   BarChart3,
   Zap,
-  Sparkles,
-  ArrowLeft,
+  ChevronRight,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Loader2,
+  FileText,
+  ChevronUp,
   ChevronDown,
+  Edit,
+  BookOpen,
+  Save,
+  X,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { showToast } from '@/lib/utils/toast';
 import { getProviderIcon } from '@/lib/utils/ai-provider-icons';
-import { getAllModels, getModelsByProvider, AIModel } from '@/lib/utils/ai-models-config';
+import { getAllModels, AIModel } from '@/lib/utils/ai-models-config';
 import { cn } from '@/lib/utils';
+import { ProgressiveLoader } from '@/components/ui/progressive-loader';
 
-export default function SettingsPageImproved() {
+export default function SettingsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
 
-  // Active tab management with URL sync
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'profile');
+  // Loading states for each data source
+  const [loadingStates, setLoadingStates] = useState({
+    apiKeys: true,
+    financialDataKeys: true,
+    aiModels: true,
+    systemPrompts: true,
+  });
+
+  // Initial page load state
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [initialLoadingStage, setInitialLoadingStage] = useState(0);
+
+  // Progressive loader stages for initial data fetch
+  const initialLoadingStages = [
+    { name: 'Loading API keys', estimatedDuration: 400, weight: 1 },
+    { name: 'Loading financial data sources', estimatedDuration: 400, weight: 1 },
+    { name: 'Loading AI models', estimatedDuration: 500, weight: 1 },
+    { name: 'Loading system prompts', estimatedDuration: 400, weight: 1 },
+  ];
+
+  // Active section management with URL sync
+  const [activeSection, setActiveSection] = useState(searchParams.get('section') || 'profile');
 
   // Profile settings
   const [name, setName] = useState(session?.user?.name || '');
@@ -74,9 +103,9 @@ export default function SettingsPageImproved() {
   // API Keys state
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [financialDataKeys, setFinancialDataKeys] = useState<any[]>([]);
-  const [financialDataSummary, setFinancialDataSummary] = useState<any>(null);
-  const [checkingConnection, setCheckingConnection] = useState(false);
   const [showAddKey, setShowAddKey] = useState(false);
+  const [testingKeys, setTestingKeys] = useState<Set<string>>(new Set());
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, any>>({});
   const [newKey, setNewKey] = useState({
     name: '',
     provider: '',
@@ -86,18 +115,29 @@ export default function SettingsPageImproved() {
 
   // AI Models state
   const [availableModels, setAvailableModels] = useState<any[]>([]);
-  const [selectedModel, setSelectedModel] = useState('');
-  const [testMessage, setTestMessage] = useState('');
-  const [testResult, setTestResult] = useState<any>(null);
-  const [testingModel, setTestingModel] = useState(false);
   const [showAddAiKey, setShowAddAiKey] = useState(false);
   const [newAiKey, setNewAiKey] = useState({
     name: '',
     provider: '',
     apiKey: '',
   });
-  const [preferredModel, setPreferredModel] = useState('');
-  const [autoSelectModel, setAutoSelectModel] = useState(true);
+
+  // System Prompts state
+  const [systemPrompts, setSystemPrompts] = useState<any[]>([]);
+  const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set());
+  const [editingPrompt, setEditingPrompt] = useState<string | null>(null);
+  const [showAddPrompt, setShowAddPrompt] = useState(false);
+  const [newPrompt, setNewPrompt] = useState({
+    name: '',
+    description: '',
+    content: '',
+    category: 'financial',
+  });
+  const [editedPromptData, setEditedPromptData] = useState<Record<string, {
+    name: string;
+    description: string;
+    content: string;
+  }>>({});
 
   // Mock usage statistics
   const [usageStats] = useState({
@@ -109,58 +149,60 @@ export default function SettingsPageImproved() {
       tokens: 125000,
       cost: 6.78,
     },
-    byModel: [
-      { model: 'GPT-4', requests: 234, cost: 12.34, avgTokens: 1234 },
-      { model: 'Claude-3-Sonnet', requests: 456, cost: 8.90, avgTokens: 980 },
-      { model: 'Gemini-Pro', requests: 557, cost: 2.21, avgTokens: 567 },
-    ],
   });
 
-  // Tab configuration
-  const tabs = [
-    { value: 'profile', label: 'Profile', icon: User },
-    { value: 'api-keys', label: 'Data Integration', icon: Database },
-    { value: 'ai-models', label: 'AI Models', icon: Brain },
-    { value: 'notifications', label: 'Notifications', icon: Bell },
-    { value: 'security', label: 'Security', icon: Shield },
-    { value: 'billing', label: 'Billing', icon: CreditCard },
-    { value: 'appearance', label: 'Appearance', icon: Palette },
+  // Navigation items
+  const navigationItems = [
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'data-integration', label: 'Data Integration', icon: Database },
+    { id: 'ai-models', label: 'AI Models', icon: Brain },
+    { id: 'system-prompts', label: 'System Prompts', icon: Settings },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'billing', label: 'Billing', icon: CreditCard },
+    { id: 'appearance', label: 'Appearance', icon: Palette },
   ];
 
-  // Get configured AI providers (providers that have API keys)
-  const configuredProviders = apiKeys
-    .filter(key => key.category === 'ai')
-    .map(key => key.provider);
-
-  // Filter models to only show those from configured providers
-  const availableModelsFromConfigured: AIModel[] = getAllModels().filter(model =>
-    configuredProviders.includes(model.provider)
-  );
-
-  // Sync active tab with URL parameter
+  // Sync active section with URL parameter
   useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab && tab !== activeTab) {
-      setActiveTab(tab);
+    const section = searchParams.get('section');
+    if (section && section !== activeSection) {
+      setActiveSection(section);
     }
-  }, [searchParams, activeTab]);
+  }, [searchParams, activeSection]);
 
-  // Fetch API keys on mount
+  // Fetch data on mount
   useEffect(() => {
     if (status === 'authenticated') {
-      fetchApiKeys();
-      fetchFinancialDataKeys();
-      fetchAIModels();
+      const loadAllData = async () => {
+        setIsInitialLoading(true);
+        setInitialLoadingStage(0);
+
+        // Load data in parallel for much faster page load!
+        // Track completion to update progress
+        let completed = 0;
+        const updateStage = () => {
+          completed++;
+          setInitialLoadingStage(completed);
+        };
+
+        await Promise.all([
+          fetchApiKeys().then(updateStage),
+          fetchFinancialDataKeys().then(updateStage),
+          fetchAIModels().then(updateStage),
+          fetchSystemPrompts().then(updateStage),
+        ]);
+
+        // Complete loading
+        setIsInitialLoading(false);
+      };
+
+      loadAllData();
     }
   }, [status]);
 
-  // Handle tab change and update URL
-  const handleTabChange = (newTab: string) => {
-    setActiveTab(newTab);
-    router.push(`/settings?tab=${newTab}`, { scroll: false });
-  };
-
   const fetchApiKeys = async () => {
+    setLoadingStates(prev => ({ ...prev, apiKeys: true }));
     try {
       const res = await fetch('/api/keys');
       const data = await res.json();
@@ -169,34 +211,53 @@ export default function SettingsPageImproved() {
       }
     } catch (error) {
       console.error('Failed to fetch API keys:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, apiKeys: false }));
     }
   };
 
   const fetchFinancialDataKeys = async () => {
+    setLoadingStates(prev => ({ ...prev, financialDataKeys: true }));
     try {
       const res = await fetch('/api/settings/financial-data');
       const data = await res.json();
       if (data.success) {
         setFinancialDataKeys(data.keys);
-        setFinancialDataSummary(data.summary);
       }
     } catch (error) {
       console.error('Failed to fetch financial data keys:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, financialDataKeys: false }));
     }
   };
 
   const fetchAIModels = async () => {
+    setLoadingStates(prev => ({ ...prev, aiModels: true }));
     try {
       const res = await fetch('/api/ai/models');
       const data = await res.json();
       if (data.success) {
         setAvailableModels(data.available);
-        if (data.available.length > 0) {
-          setSelectedModel(data.available[0].id);
-        }
       }
     } catch (error) {
       console.error('Failed to fetch AI models:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, aiModels: false }));
+    }
+  };
+
+  const fetchSystemPrompts = async () => {
+    setLoadingStates(prev => ({ ...prev, systemPrompts: true }));
+    try {
+      const res = await fetch('/api/v2/prompts');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setSystemPrompts(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch system prompts:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, systemPrompts: false }));
     }
   };
 
@@ -204,9 +265,9 @@ export default function SettingsPageImproved() {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success('Profile updated successfully');
+      showToast.success('Profile updated successfully');
     } catch (error) {
-      toast.error('Failed to update profile');
+      showToast.error('Failed to update profile');
     } finally {
       setLoading(false);
     }
@@ -216,9 +277,9 @@ export default function SettingsPageImproved() {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success('Notification preferences saved');
+      showToast.success('Notification preferences saved');
     } catch (error) {
-      toast.error('Failed to save preferences');
+      showToast.error('Failed to save preferences');
     } finally {
       setLoading(false);
     }
@@ -226,7 +287,7 @@ export default function SettingsPageImproved() {
 
   const handleAddApiKey = async () => {
     if (!newKey.name || !newKey.apiKey) {
-      toast.error('Please fill in all fields');
+      showToast.error('Please fill in all fields');
       return;
     }
 
@@ -241,7 +302,7 @@ export default function SettingsPageImproved() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        toast.success('Data integration added successfully');
+        showToast.success('Data integration added successfully');
         setApiKeys([...apiKeys, data.key]);
         setNewKey({ name: '', provider: '', category: 'financial_data', apiKey: '' });
         setShowAddKey(false);
@@ -251,7 +312,7 @@ export default function SettingsPageImproved() {
         toast.error(data.error || 'Failed to add API key');
       }
     } catch (error) {
-      toast.error('Failed to add API key');
+      showToast.error('Failed to add API key');
     } finally {
       setLoading(false);
     }
@@ -268,25 +329,76 @@ export default function SettingsPageImproved() {
       });
 
       if (res.ok) {
-        toast.success('API key deleted');
+        showToast.success('API key deleted');
         setApiKeys(apiKeys.filter(k => k.id !== keyId));
         await fetchAIModels();
       } else {
-        toast.error('Failed to delete API key');
+        showToast.error('Failed to delete API key');
       }
     } catch (error) {
-      toast.error('Failed to delete API key');
+      showToast.error('Failed to delete API key');
     }
   };
 
   const handleCopyKey = (keyPreview: string) => {
     navigator.clipboard.writeText(keyPreview);
-    toast.success('Key preview copied');
+    showToast.success('Key preview copied');
+  };
+
+  const testConnection = async (keyId: string) => {
+    setTestingKeys(prev => new Set(prev).add(keyId));
+
+    try {
+      const res = await fetch('/api/settings/financial-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyId, checkAll: false }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.results?.length > 0) {
+        const result = data.results[0];
+        setConnectionStatus(prev => ({
+          ...prev,
+          [keyId]: {
+            status: result.status,
+            message: result.message,
+            lastTested: new Date().toISOString(),
+          }
+        }));
+
+        if (result.status === 'connected') {
+          showToast.success(`✅ ${result.name} connection successful!`);
+        } else {
+          showToast.error(`❌ ${result.name}: ${result.message || 'Connection failed'}`);
+        }
+      } else {
+        showToast.error('Failed to test connection');
+      }
+    } catch (error) {
+      console.error('Connection test error:', error);
+      showToast.error('Failed to test connection');
+      setConnectionStatus(prev => ({
+        ...prev,
+        [keyId]: {
+          status: 'error',
+          message: 'Test failed',
+          lastTested: new Date().toISOString(),
+        }
+      }));
+    } finally {
+      setTestingKeys(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(keyId);
+        return newSet;
+      });
+    }
   };
 
   const handleAddAiKey = async () => {
     if (!newAiKey.name || !newAiKey.provider || !newAiKey.apiKey) {
-      toast.error('Please fill in all fields');
+      showToast.error('Please fill in all fields');
       return;
     }
 
@@ -304,18 +416,147 @@ export default function SettingsPageImproved() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        toast.success('AI provider added successfully');
+        showToast.success('AI provider added successfully');
         setApiKeys([...apiKeys, data.key]);
         setNewAiKey({ name: '', provider: '', apiKey: '' });
         setShowAddAiKey(false);
         await fetchAIModels();
       } else {
-        toast.error(data.error || 'Failed to add AI provider');
+        showToast.error(data.error || 'Failed to add AI provider');
       }
     } catch (error) {
-      toast.error('Failed to add AI provider');
+      showToast.error('Failed to add AI provider');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // System Prompts handlers
+  const togglePromptExpansion = (promptId: string) => {
+    setExpandedPrompts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(promptId)) {
+        newSet.delete(promptId);
+      } else {
+        newSet.add(promptId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleAddPrompt = async () => {
+    if (!newPrompt.name || !newPrompt.content) {
+      showToast.error('Please fill in name and content');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/v2/prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPrompt),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        showToast.success('System prompt added successfully');
+        await fetchSystemPrompts();
+        setNewPrompt({ name: '', description: '', content: '', category: 'financial' });
+        setShowAddPrompt(false);
+      } else {
+        showToast.error(data.error || 'Failed to add prompt');
+      }
+    } catch (error) {
+      showToast.error('Failed to add prompt');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditPrompt = (promptId: string) => {
+    const prompt = systemPrompts.find(p => p.id === promptId);
+    if (prompt) {
+      setEditedPromptData({
+        ...editedPromptData,
+        [promptId]: {
+          name: prompt.name,
+          description: prompt.description || '',
+          content: prompt.content,
+        },
+      });
+    }
+    setEditingPrompt(promptId);
+  };
+
+  const handleSavePrompt = async (promptId: string) => {
+    const updatedPrompt = editedPromptData[promptId];
+    if (!updatedPrompt) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/v2/prompts/${promptId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedPrompt),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        showToast.success('Prompt updated successfully');
+        await fetchSystemPrompts();
+        setEditingPrompt(null);
+        // Clean up edited data
+        const newEditedData = { ...editedPromptData };
+        delete newEditedData[promptId];
+        setEditedPromptData(newEditedData);
+      } else {
+        showToast.error(data.error || 'Failed to update prompt');
+      }
+    } catch (error) {
+      showToast.error('Failed to update prompt');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateEditedPromptField = (promptId: string, field: 'name' | 'description' | 'content', value: string) => {
+    setEditedPromptData({
+      ...editedPromptData,
+      [promptId]: {
+        ...editedPromptData[promptId],
+        [field]: value,
+      },
+    });
+  };
+
+  const cancelEditPrompt = (promptId: string) => {
+    setEditingPrompt(null);
+    const newEditedData = { ...editedPromptData };
+    delete newEditedData[promptId];
+    setEditedPromptData(newEditedData);
+  };
+
+  const handleDeletePrompt = async (promptId: string) => {
+    if (!confirm('Are you sure you want to delete this prompt?')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/v2/prompts/${promptId}`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        showToast.success('Prompt deleted');
+        await fetchSystemPrompts();
+      } else {
+        showToast.error('Failed to delete prompt');
+      }
+    } catch (error) {
+      showToast.error('Failed to delete prompt');
     }
   };
 
@@ -333,746 +574,1130 @@ export default function SettingsPageImproved() {
     return null;
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Clean Header like Dashboard */}
-      <div className="p-6 space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Settings
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Manage your account settings and preferences
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => router.push('/dashboard')}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
-          </Button>
-        </div>
+  const handleSectionChange = (sectionId: string) => {
+    setActiveSection(sectionId);
+    router.push(`/settings?section=${sectionId}`, { scroll: false });
+  };
 
-        {/* Improved Tabs - Clean and Manageable Layout */}
-        <div className="space-y-6">
-          {/* Desktop - 2 rows for better readability */}
-          <div className="hidden lg:block">
-            <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList className="w-full h-auto p-1">
-                <div className="grid w-full gap-1">
-                  {/* First row - 4 columns */}
-                  <div className="grid grid-cols-4 gap-1">
-                    {tabs.slice(0, 4).map(tab => {
-                      const Icon = tab.icon;
-                      return (
-                        <TabsTrigger key={tab.value} value={tab.value} className="py-2">
-                          <Icon className="h-4 w-4 mr-2" />
-                          {tab.label}
-                        </TabsTrigger>
-                      );
-                    })}
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center">
+              <Settings className="h-6 w-6 text-gray-500 mr-3" />
+              <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
+            </div>
+            <Button
+              variant="ghost"
+              onClick={() => router.push('/dashboard')}
+              className="text-gray-600 hover:text-gray-900"
+            >
+              Back to Dashboard
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Initial Loading Overlay */}
+      {isInitialLoading && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+            <ProgressiveLoader
+              isLoading={isInitialLoading}
+              stages={initialLoadingStages}
+              currentStage={initialLoadingStage}
+              variant="detailed"
+              showElapsedTime={true}
+              showEstimatedTime={true}
+              message="Loading settings data..."
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex gap-8">
+          {/* Sidebar Navigation */}
+          <div className="w-64 flex-shrink-0">
+            <nav className="space-y-1">
+              {navigationItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeSection === item.id;
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleSectionChange(item.id)}
+                    className={cn(
+                      "w-full flex items-center justify-between px-4 py-3 text-sm font-medium rounded-lg transition-colors",
+                      isActive
+                        ? "bg-blue-50 text-blue-700 border-l-4 border-blue-700"
+                        : "text-gray-700 hover:bg-gray-100"
+                    )}
+                  >
+                    <div className="flex items-center">
+                      <Icon className={cn(
+                        "h-5 w-5 mr-3",
+                        isActive ? "text-blue-700" : "text-gray-400"
+                      )} />
+                      {item.label}
+                    </div>
+                    {isActive && <ChevronRight className="h-4 w-4" />}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1 min-w-0">
+            {activeSection === 'profile' && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b">
+                  <h2 className="text-lg font-medium text-gray-900">Profile Information</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Update your personal information and email address
+                  </p>
+                </div>
+                <div className="px-6 py-4 space-y-6">
+                  <div>
+                    <Label htmlFor="name" className="text-sm font-medium text-gray-700">
+                      Full Name
+                    </Label>
+                    <Input
+                      id="name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="mt-1"
+                    />
                   </div>
-                  {/* Second row - 3 columns */}
-                  <div className="grid grid-cols-3 gap-1">
-                    {tabs.slice(4).map(tab => {
-                      const Icon = tab.icon;
-                      return (
-                        <TabsTrigger key={tab.value} value={tab.value} className="py-2">
-                          <Icon className="h-4 w-4 mr-2" />
-                          {tab.label}
-                        </TabsTrigger>
-                      );
-                    })}
+                  <div>
+                    <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+                      Email Address
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="company" className="text-sm font-medium text-gray-700">
+                      Company
+                    </Label>
+                    <Input
+                      id="company"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      placeholder="Your Company Name"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div className="pt-4 border-t">
+                    <Button onClick={handleSaveProfile} disabled={loading}>
+                      {loading ? 'Saving...' : 'Save Changes'}
+                    </Button>
                   </div>
                 </div>
-              </TabsList>
-
-              {/* Tab Contents */}
-              <div className="mt-6">
-                {renderTabContent()}
               </div>
-            </Tabs>
-          </div>
+            )}
 
-          {/* Tablet - 2 columns grid */}
-          <div className="hidden md:block lg:hidden">
-            <Tabs value={activeTab} onValueChange={handleTabChange}>
-              <TabsList className="grid w-full grid-cols-2 h-auto">
-                {tabs.map(tab => {
-                  const Icon = tab.icon;
-                  return (
-                    <TabsTrigger key={tab.value} value={tab.value} className="py-2">
-                      <Icon className="h-4 w-4 mr-2" />
-                      {tab.label}
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
-
-              {/* Tab Contents */}
-              <div className="mt-6">
-                {renderTabContent()}
-              </div>
-            </Tabs>
-          </div>
-
-          {/* Mobile Dropdown */}
-          <div className="md:hidden">
-            <Select value={activeTab} onValueChange={handleTabChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {tabs.find(t => t.value === activeTab)?.label}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {tabs.map(tab => {
-                  const Icon = tab.icon;
-                  return (
-                    <SelectItem key={tab.value} value={tab.value}>
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" />
-                        {tab.label}
+            {activeSection === 'data-integration' && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-medium text-gray-900">Data Integration</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Connect your data sources for market data and analytics
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {financialDataKeys.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          showToast.loading('Testing all connections...', { id: 'test-all' });
+                          for (const key of financialDataKeys) {
+                            await testConnection(key.id);
+                          }
+                          showToast.dismiss('test-all');
+                        }}
+                        disabled={testingKeys.size > 0}
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Test All
+                      </Button>
+                    )}
+                    <Button size="sm" onClick={() => setShowAddKey(!showAddKey)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Integration
+                    </Button>
+                  </div>
+                </div>
+                <div className="px-6 py-4">
+                  {showAddKey && (
+                    <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <Label className="text-sm font-medium text-gray-700">Key Name</Label>
+                          <Input
+                            placeholder="e.g., Production API"
+                            value={newKey.name}
+                            onChange={(e) => setNewKey({ ...newKey, name: e.target.value })}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-gray-700">Provider</Label>
+                          <Select
+                            value={newKey.provider}
+                            onValueChange={(value) => setNewKey({ ...newKey, provider: value })}
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue placeholder="Select provider" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="alpha_vantage">Alpha Vantage</SelectItem>
+                              <SelectItem value="polygon">Polygon.io</SelectItem>
+                              <SelectItem value="coingecko">CoinGecko</SelectItem>
+                              <SelectItem value="coinmarketcap">CoinMarketCap</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+                      <div className="mb-4">
+                        <Label className="text-sm font-medium text-gray-700">API Key</Label>
+                        <Input
+                          type="password"
+                          placeholder="Enter your API key"
+                          value={newKey.apiKey}
+                          onChange={(e) => setNewKey({ ...newKey, apiKey: e.target.value })}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setShowAddKey(false)}>
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleAddApiKey} disabled={loading}>
+                          {loading ? 'Adding...' : 'Add Key'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
-            <div className="mt-6">
-              {renderTabContent()}
-            </div>
+                  {loadingStates.financialDataKeys ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="border rounded-lg p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center flex-1">
+                              <Skeleton className="h-5 w-5 mr-3" />
+                              <div className="flex-1">
+                                <Skeleton className="h-4 w-32 mb-2" />
+                                <Skeleton className="h-3 w-48" />
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-8 w-16" />
+                              <Skeleton className="h-8 w-8" />
+                              <Skeleton className="h-8 w-8" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : financialDataKeys.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Database className="mx-auto h-12 w-12 text-gray-400" />
+                      <h3 className="mt-2 text-sm font-medium text-gray-900">No integrations</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Get started by adding your first data source
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {financialDataKeys.map((key) => {
+                        const isTestingThis = testingKeys.has(key.id);
+                        const status = connectionStatus[key.id];
+
+                        return (
+                          <div key={key.id} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center">
+                                <Database className="h-5 w-5 text-gray-400 mr-3" />
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">{key.name}</p>
+                                  <p className="text-sm text-gray-500">
+                                    {key.provider} • {key.keyPreview}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => testConnection(key.id)}
+                                  disabled={isTestingThis}
+                                  className="flex items-center gap-2"
+                                >
+                                  {isTestingThis ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                      Testing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <RefreshCw className="h-3 w-3" />
+                                      Test
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleCopyKey(key.keyPreview)}
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteApiKey(key.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            {status && (
+                              <div className={cn(
+                                "mt-3 p-2 rounded-md flex items-center gap-2 text-sm",
+                                status.status === 'connected'
+                                  ? "bg-green-50 text-green-700 border border-green-200"
+                                  : status.status === 'error'
+                                  ? "bg-red-50 text-red-700 border border-red-200"
+                                  : "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                              )}>
+                                {status.status === 'connected' ? (
+                                  <CheckCircle className="h-4 w-4" />
+                                ) : status.status === 'error' ? (
+                                  <XCircle className="h-4 w-4" />
+                                ) : (
+                                  <AlertCircle className="h-4 w-4" />
+                                )}
+                                <span className="font-medium">
+                                  {status.status === 'connected' ? 'Connected' :
+                                   status.status === 'error' ? 'Connection Failed' :
+                                   'Unknown Status'}
+                                </span>
+                                {status.message && (
+                                  <span className="ml-1">• {status.message}</span>
+                                )}
+                                {status.lastTested && (
+                                  <span className="ml-auto text-xs opacity-70">
+                                    Tested {new Date(status.lastTested).toLocaleTimeString()}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'ai-models' && (
+              <div className="space-y-6">
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">Total Requests</p>
+                        <p className="text-2xl font-semibold text-gray-900">
+                          {usageStats.totalRequests.toLocaleString()}
+                        </p>
+                      </div>
+                      <BarChart3 className="h-8 w-8 text-blue-500" />
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">Total Tokens</p>
+                        <p className="text-2xl font-semibold text-gray-900">
+                          {usageStats.totalTokens.toLocaleString()}
+                        </p>
+                      </div>
+                      <Zap className="h-8 w-8 text-yellow-500" />
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">Total Cost</p>
+                        <p className="text-2xl font-semibold text-gray-900">
+                          ${usageStats.totalCost.toFixed(2)}
+                        </p>
+                      </div>
+                      <DollarSign className="h-8 w-8 text-green-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI Provider Configuration */}
+                <div className="bg-white rounded-lg shadow">
+                  <div className="px-6 py-4 border-b flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-medium text-gray-900">AI Provider Configuration</h2>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Manage your AI provider API keys
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {apiKeys.filter(key => key.category === 'ai').length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            showToast.loading('Testing all AI connections...', { id: 'test-all-ai' });
+                            for (const key of apiKeys.filter(k => k.category === 'ai')) {
+                              await testConnection(key.id);
+                            }
+                            showToast.dismiss('test-all-ai');
+                          }}
+                          disabled={testingKeys.size > 0}
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Test All
+                        </Button>
+                      )}
+                      <Button size="sm" onClick={() => setShowAddAiKey(!showAddAiKey)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Provider
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4">
+                    {showAddAiKey && (
+                      <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">Provider Name</Label>
+                            <Input
+                              placeholder="e.g., Production OpenAI"
+                              value={newAiKey.name}
+                              onChange={(e) => setNewAiKey({ ...newAiKey, name: e.target.value })}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-700">AI Provider</Label>
+                            <Select
+                              value={newAiKey.provider}
+                              onValueChange={(value) => setNewAiKey({ ...newAiKey, provider: value })}
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Select provider" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="openai">OpenAI</SelectItem>
+                                <SelectItem value="anthropic">Anthropic</SelectItem>
+                                <SelectItem value="google">Google</SelectItem>
+                                <SelectItem value="groq">Groq</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="mb-4">
+                          <Label className="text-sm font-medium text-gray-700">API Key</Label>
+                          <Input
+                            type="password"
+                            placeholder="Enter your API key"
+                            value={newAiKey.apiKey}
+                            onChange={(e) => setNewAiKey({ ...newAiKey, apiKey: e.target.value })}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => setShowAddAiKey(false)}>
+                            Cancel
+                          </Button>
+                          <Button size="sm" onClick={handleAddAiKey} disabled={loading}>
+                            {loading ? 'Adding...' : 'Add Provider'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {loadingStates.aiModels ? (
+                      <div className="space-y-3">
+                        {[1, 2].map((i) => (
+                          <div key={i} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center flex-1">
+                                <Skeleton className="h-9 w-9 rounded-lg mr-3" />
+                                <div className="flex-1">
+                                  <Skeleton className="h-4 w-40 mb-2" />
+                                  <Skeleton className="h-3 w-56" />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Skeleton className="h-8 w-16" />
+                                <Skeleton className="h-8 w-8" />
+                                <Skeleton className="h-8 w-8" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : apiKeys.filter(key => key.category === 'ai').length === 0 ? (
+                      <div className="text-center py-12">
+                        <Brain className="mx-auto h-12 w-12 text-gray-400" />
+                        <h3 className="mt-2 text-sm font-medium text-gray-900">No AI providers</h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                          Add your first AI provider to get started
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {apiKeys.filter(key => key.category === 'ai').map((key) => {
+                          const providerConfig = getProviderIcon(key.provider);
+                          const ProviderIcon = providerConfig.icon;
+                          const isTestingThis = testingKeys.has(key.id);
+                          const status = connectionStatus[key.id];
+
+                          return (
+                            <div key={key.id} className="border rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center">
+                                  <div className={`p-2 rounded-lg ${providerConfig.bgColor} mr-3`}>
+                                    <ProviderIcon className={`h-5 w-5 ${providerConfig.color}`} />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">{key.name}</p>
+                                    <p className="text-sm text-gray-500">
+                                      {providerConfig.displayName} • {key.keyPreview}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => testConnection(key.id)}
+                                    disabled={isTestingThis}
+                                    className="flex items-center gap-2"
+                                  >
+                                    {isTestingThis ? (
+                                      <>
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Testing...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <RefreshCw className="h-3 w-3" />
+                                        Test
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleCopyKey(key.keyPreview)}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteApiKey(key.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {status && (
+                                <div className={cn(
+                                  "mt-3 p-2 rounded-md flex items-center gap-2 text-sm",
+                                  status.status === 'connected'
+                                    ? "bg-green-50 text-green-700 border border-green-200"
+                                    : status.status === 'error'
+                                    ? "bg-red-50 text-red-700 border border-red-200"
+                                    : "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                                )}>
+                                  {status.status === 'connected' ? (
+                                    <CheckCircle className="h-4 w-4" />
+                                  ) : status.status === 'error' ? (
+                                    <XCircle className="h-4 w-4" />
+                                  ) : (
+                                    <AlertCircle className="h-4 w-4" />
+                                  )}
+                                  <span className="font-medium">
+                                    {status.status === 'connected' ? 'Connected' :
+                                     status.status === 'error' ? 'Connection Failed' :
+                                     'Unknown Status'}
+                                  </span>
+                                  {status.message && (
+                                    <span className="ml-1">• {status.message}</span>
+                                  )}
+                                  {status.lastTested && (
+                                    <span className="ml-auto text-xs opacity-70">
+                                      Tested {new Date(status.lastTested).toLocaleTimeString()}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'system-prompts' && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-medium text-gray-900">System Prompts</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Manage AI system prompts for different financial analysis scenarios
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={() => setShowAddPrompt(!showAddPrompt)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Prompt
+                  </Button>
+                </div>
+                <div className="px-6 py-4">
+                  {showAddPrompt && (
+                    <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <Label className="text-sm font-medium text-gray-700">Prompt Name</Label>
+                          <Input
+                            placeholder="e.g., Financial Analysis"
+                            value={newPrompt.name}
+                            onChange={(e) => setNewPrompt({ ...newPrompt, name: e.target.value })}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-gray-700">Category</Label>
+                          <Select
+                            value={newPrompt.category}
+                            onValueChange={(value) => setNewPrompt({ ...newPrompt, category: value })}
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="financial">Financial Analysis</SelectItem>
+                              <SelectItem value="market">Market Research</SelectItem>
+                              <SelectItem value="general">General</SelectItem>
+                              <SelectItem value="technical">Technical Analysis</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="mb-4">
+                        <Label className="text-sm font-medium text-gray-700">Description (Optional)</Label>
+                        <Input
+                          placeholder="Brief description of this prompt"
+                          value={newPrompt.description}
+                          onChange={(e) => setNewPrompt({ ...newPrompt, description: e.target.value })}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="mb-4">
+                        <Label className="text-sm font-medium text-gray-700">Prompt Content</Label>
+                        <Textarea
+                          placeholder="Enter the system prompt content..."
+                          value={newPrompt.content}
+                          onChange={(e) => setNewPrompt({ ...newPrompt, content: e.target.value })}
+                          className="mt-1 min-h-[200px] font-mono text-sm"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => {
+                          setShowAddPrompt(false);
+                          setNewPrompt({ name: '', description: '', content: '', category: 'financial' });
+                        }}>
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleAddPrompt} disabled={loading}>
+                          {loading ? 'Adding...' : 'Add Prompt'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {loadingStates.systemPrompts ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="border rounded-lg p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center flex-1">
+                              <Skeleton className="h-4 w-4 mr-2" />
+                              <div className="flex-1">
+                                <Skeleton className="h-4 w-48 mb-2" />
+                                <Skeleton className="h-3 w-64" />
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Skeleton className="h-8 w-8" />
+                              <Skeleton className="h-8 w-8" />
+                              <Skeleton className="h-8 w-8" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : systemPrompts.length === 0 ? (
+                    <div className="text-center py-12">
+                      <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                      <h3 className="mt-2 text-sm font-medium text-gray-900">No system prompts</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Create your first system prompt to customize AI responses
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {systemPrompts.map((prompt: any) => {
+                        const isExpanded = expandedPrompts.has(prompt.id);
+                        const isEditing = editingPrompt === prompt.id;
+                        const editedData = editedPromptData[prompt.id] || {
+                          name: prompt.name,
+                          description: prompt.description || '',
+                          content: prompt.content,
+                        };
+
+                        return (
+                          <div key={prompt.id} className="border rounded-lg">
+                            <div className="p-4">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  {isEditing ? (
+                                    <div className="space-y-3">
+                                      <div>
+                                        <Label className="text-xs text-gray-600">Name</Label>
+                                        <Input
+                                          value={editedData.name}
+                                          onChange={(e) => updateEditedPromptField(prompt.id, 'name', e.target.value)}
+                                          className="mt-1"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-xs text-gray-600">Description</Label>
+                                        <Input
+                                          value={editedData.description}
+                                          onChange={(e) => updateEditedPromptField(prompt.id, 'description', e.target.value)}
+                                          className="mt-1"
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <FileText className="h-4 w-4 text-gray-400" />
+                                        <h3 className="text-sm font-medium text-gray-900">{prompt.name}</h3>
+                                        <Badge variant="secondary" className="text-xs">
+                                          {prompt.category}
+                                        </Badge>
+                                      </div>
+                                      {prompt.description && (
+                                        <p className="text-sm text-gray-500 ml-6">{prompt.description}</p>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 ml-4">
+                                  {isEditing ? (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleSavePrompt(prompt.id)}
+                                        disabled={loading}
+                                      >
+                                        <Save className="h-4 w-4 text-green-600" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => cancelEditPrompt(prompt.id)}
+                                      >
+                                        <X className="h-4 w-4 text-gray-600" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => togglePromptExpansion(prompt.id)}
+                                      >
+                                        {isExpanded ? (
+                                          <ChevronUp className="h-4 w-4" />
+                                        ) : (
+                                          <ChevronDown className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleEditPrompt(prompt.id)}
+                                      >
+                                        <Edit className="h-4 w-4 text-blue-600" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDeletePrompt(prompt.id)}
+                                      >
+                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              {isExpanded && (
+                                <div className="mt-4 pt-4 border-t">
+                                  {isEditing ? (
+                                    <div>
+                                      <Label className="text-xs text-gray-600 mb-2 block">Content</Label>
+                                      <Textarea
+                                        value={editedData.content}
+                                        onChange={(e) => updateEditedPromptField(prompt.id, 'content', e.target.value)}
+                                        className="font-mono text-sm min-h-[300px]"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="bg-gray-50 rounded-lg p-4">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <Label className="text-xs font-medium text-gray-600">Prompt Content</Label>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(prompt.content);
+                                            showToast.success('Prompt copied to clipboard');
+                                          }}
+                                        >
+                                          <Copy className="h-3 w-3 mr-1" />
+                                          Copy
+                                        </Button>
+                                      </div>
+                                      <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
+                                        {prompt.content}
+                                      </pre>
+                                      {prompt.updatedAt && (
+                                        <p className="text-xs text-gray-500 mt-3 pt-3 border-t">
+                                          Last updated: {new Date(prompt.updatedAt).toLocaleString()}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'notifications' && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b">
+                  <h2 className="text-lg font-medium text-gray-900">Notification Preferences</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Choose how you want to be notified
+                  </p>
+                </div>
+                <div className="px-6 py-4 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Email Notifications</p>
+                      <p className="text-sm text-gray-500">
+                        Receive email updates about your account activity
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setEmailNotifications(!emailNotifications)}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                        emailNotifications ? 'bg-blue-600' : 'bg-gray-200'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                          emailNotifications ? 'translate-x-6' : 'translate-x-1'
+                        )}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Push Notifications</p>
+                      <p className="text-sm text-gray-500">
+                        Receive push notifications on your devices
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setPushNotifications(!pushNotifications)}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                        pushNotifications ? 'bg-blue-600' : 'bg-gray-200'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                          pushNotifications ? 'translate-x-6' : 'translate-x-1'
+                        )}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Weekly Report</p>
+                      <p className="text-sm text-gray-500">
+                        Get a weekly summary of your activity
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setWeeklyReport(!weeklyReport)}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                        weeklyReport ? 'bg-blue-600' : 'bg-gray-200'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                          weeklyReport ? 'translate-x-6' : 'translate-x-1'
+                        )}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="pt-4 border-t">
+                    <Button onClick={handleSaveNotifications} disabled={loading}>
+                      {loading ? 'Saving...' : 'Save Preferences'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'security' && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow">
+                  <div className="px-6 py-4 border-b">
+                    <h2 className="text-lg font-medium text-gray-900">Security Settings</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Manage your password and security preferences
+                    </p>
+                  </div>
+                  <div className="px-6 py-4 space-y-4">
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center">
+                        <Key className="h-5 w-5 text-gray-400 mr-3" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Password</p>
+                          <p className="text-sm text-gray-500">Last changed 3 months ago</p>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Change Password
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center">
+                        <Shield className="h-5 w-5 text-gray-400 mr-3" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Two-Factor Authentication</p>
+                          <p className="text-sm text-gray-500">Add an extra layer of security</p>
+                        </div>
+                      </div>
+                      <Badge variant="secondary">Not Enabled</Badge>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow border border-red-200">
+                  <div className="px-6 py-4 border-b border-red-200">
+                    <h2 className="text-lg font-medium text-red-600">Danger Zone</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Irreversible and destructive actions
+                    </p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Delete Account</p>
+                        <p className="text-sm text-gray-500">
+                          Permanently delete your account and all data
+                        </p>
+                      </div>
+                      <Button variant="destructive" size="sm">
+                        Delete Account
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'billing' && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b">
+                  <h2 className="text-lg font-medium text-gray-900">Billing & Subscription</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Manage your subscription and payment methods
+                  </p>
+                </div>
+                <div className="px-6 py-4 space-y-6">
+                  <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <h3 className="text-xl font-semibold text-gray-900">Pro Plan</h3>
+                          <Badge className="bg-blue-600">Current Plan</Badge>
+                        </div>
+                        <p className="text-3xl font-bold text-gray-900 mb-4">
+                          $49<span className="text-base font-normal text-gray-600">/month</span>
+                        </p>
+                        <div className="space-y-2">
+                          <div className="flex items-center text-sm">
+                            <Check className="h-4 w-4 text-green-600 mr-2" />
+                            <span className="text-gray-700">Unlimited AI Credits</span>
+                          </div>
+                          <div className="flex items-center text-sm">
+                            <Check className="h-4 w-4 text-green-600 mr-2" />
+                            <span className="text-gray-700">Advanced Analytics</span>
+                          </div>
+                          <div className="flex items-center text-sm">
+                            <Check className="h-4 w-4 text-green-600 mr-2" />
+                            <span className="text-gray-700">Priority Support</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500 mb-1">Next billing date</p>
+                        <p className="font-medium text-gray-900 mb-4">March 15, 2025</p>
+                        <Button variant="outline" size="sm">
+                          Manage Plan
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900 mb-3">Payment Method</h4>
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-gray-100 rounded-lg mr-3">
+                          <CreditCard className="h-5 w-5 text-gray-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">•••• •••• •••• 4242</p>
+                          <p className="text-sm text-gray-500">Expires 12/2025</p>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Update
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'appearance' && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="px-6 py-4 border-b">
+                  <h2 className="text-lg font-medium text-gray-900">Appearance Settings</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Customize how AssetWorks looks on your device
+                  </p>
+                </div>
+                <div className="px-6 py-4">
+                  <div className="space-y-4">
+                    <Label className="text-sm font-medium text-gray-700">Theme</Label>
+                    <div className="grid grid-cols-3 gap-4">
+                      <button
+                        onClick={() => setTheme('light')}
+                        className={cn(
+                          "p-4 border-2 rounded-lg transition-all",
+                          theme === 'light'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        )}
+                      >
+                        <Sun className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
+                        <p className="text-sm font-medium text-gray-900">Light</p>
+                      </button>
+
+                      <button
+                        disabled
+                        className="p-4 border-2 border-gray-200 rounded-lg opacity-60 cursor-not-allowed relative"
+                      >
+                        <Badge
+                          variant="secondary"
+                          className="absolute -top-2 -right-2 text-[10px] px-1.5 py-0.5"
+                        >
+                          Soon
+                        </Badge>
+                        <Moon className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                        <p className="text-sm font-medium text-gray-900">Dark</p>
+                      </button>
+
+                      <button
+                        onClick={() => setTheme('system')}
+                        className={cn(
+                          "p-4 border-2 rounded-lg transition-all",
+                          theme === 'system'
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        )}
+                      >
+                        <Monitor className="h-8 w-8 mx-auto mb-2 text-gray-600" />
+                        <p className="text-sm font-medium text-gray-900">System</p>
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      Dark mode is coming soon! We're working hard to bring you a beautiful dark theme.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
-
-  // Separate function for tab content
-  function renderTabContent() {
-    switch (activeTab) {
-      case 'profile':
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Profile Information</CardTitle>
-              <CardDescription>
-                Update your personal information and email address
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="John Doe"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="john@example.com"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="company">Company</Label>
-                  <Input
-                    id="company"
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
-                    placeholder="Your Company Name"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button onClick={handleSaveProfile} disabled={loading}>
-                  {loading ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        );
-
-      case 'api-keys':
-        return (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Financial Data Integration</CardTitle>
-                  <CardDescription>
-                    Connect your data sources for stocks and crypto
-                  </CardDescription>
-                </div>
-                <Button onClick={() => setShowAddKey(!showAddKey)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Integration
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Add New Integration Form */}
-              {showAddKey && (
-                <Card>
-                  <CardContent className="pt-6 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="keyName">Key Name</Label>
-                        <Input
-                          id="keyName"
-                          placeholder="e.g., My API Key"
-                          value={newKey.name}
-                          onChange={(e) => setNewKey({ ...newKey, name: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="provider">Provider</Label>
-                        <Select
-                          value={newKey.provider}
-                          onValueChange={(value) => setNewKey({ ...newKey, provider: value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select provider" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="alpha_vantage">Alpha Vantage</SelectItem>
-                            <SelectItem value="polygon">Polygon.io</SelectItem>
-                            <SelectItem value="coingecko">CoinGecko</SelectItem>
-                            <SelectItem value="coinmarketcap">CoinMarketCap</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="apiKey">API Key</Label>
-                      <Input
-                        id="apiKey"
-                        type="password"
-                        placeholder="sk-..."
-                        value={newKey.apiKey}
-                        onChange={(e) => setNewKey({ ...newKey, apiKey: e.target.value })}
-                      />
-                    </div>
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" onClick={() => setShowAddKey(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleAddApiKey} disabled={loading}>
-                        {loading ? 'Adding...' : 'Add Key'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Keys List */}
-              <div className="space-y-3">
-                {financialDataKeys.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Database className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p className="font-medium">No data sources configured</p>
-                    <p className="text-sm mt-1">Connect your first data source to get started</p>
-                  </div>
-                ) : (
-                  financialDataKeys.map((key) => (
-                    <Card key={key.id}>
-                      <CardContent className="flex items-center justify-between py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <Database className="w-5 h-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{key.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {key.provider} • {key.keyPreview}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCopyKey(key.keyPreview)}
-                          >
-                            <Copy className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteApiKey(key.id)}
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        );
-
-      case 'ai-models':
-        return (
-          <div className="space-y-6">
-            {/* Usage Stats */}
-            <div className="grid gap-4 md:grid-cols-4">
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Requests</p>
-                      <p className="text-2xl font-bold">{usageStats.totalRequests.toLocaleString()}</p>
-                    </div>
-                    <BarChart3 className="w-8 h-8 text-blue-500 opacity-50" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Tokens</p>
-                      <p className="text-2xl font-bold">{usageStats.totalTokens.toLocaleString()}</p>
-                    </div>
-                    <Zap className="w-8 h-8 text-yellow-500 opacity-50" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Cost</p>
-                      <p className="text-2xl font-bold">${usageStats.totalCost.toFixed(2)}</p>
-                    </div>
-                    <DollarSign className="w-8 h-8 text-green-500 opacity-50" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Active Models</p>
-                      <p className="text-2xl font-bold">{availableModels.length}</p>
-                    </div>
-                    <Brain className="w-8 h-8 text-purple-500 opacity-50" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* AI Provider Integration */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>AI Provider Integration</CardTitle>
-                    <CardDescription>
-                      Configure API keys for AI providers
-                    </CardDescription>
-                  </div>
-                  <Button onClick={() => setShowAddAiKey(!showAddAiKey)} size="sm">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Provider
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* Add AI Key Form */}
-                {showAddAiKey && (
-                  <Card className="bg-muted/50 mb-4">
-                    <CardContent className="pt-6 space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Provider Name</Label>
-                          <Input
-                            placeholder="e.g., Production OpenAI"
-                            value={newAiKey.name}
-                            onChange={(e) => setNewAiKey({ ...newAiKey, name: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>AI Provider</Label>
-                          <Select
-                            value={newAiKey.provider}
-                            onValueChange={(value) => setNewAiKey({ ...newAiKey, provider: value })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select provider" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="openai">OpenAI</SelectItem>
-                              <SelectItem value="anthropic">Anthropic</SelectItem>
-                              <SelectItem value="google">Google</SelectItem>
-                              <SelectItem value="groq">Groq</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>API Key</Label>
-                        <Input
-                          type="password"
-                          placeholder="Enter your API key"
-                          value={newAiKey.apiKey}
-                          onChange={(e) => setNewAiKey({ ...newAiKey, apiKey: e.target.value })}
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => setShowAddAiKey(false)}>
-                          Cancel
-                        </Button>
-                        <Button onClick={handleAddAiKey} disabled={loading}>
-                          {loading ? 'Adding...' : 'Add Provider'}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* AI Keys List */}
-                <div className="space-y-3">
-                  {apiKeys.filter(key => key.category === 'ai').length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Key className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                      <p className="font-medium">No AI providers configured</p>
-                      <p className="text-sm mt-1">Add your first AI provider to get started</p>
-                    </div>
-                  ) : (
-                    apiKeys.filter(key => key.category === 'ai').map((key) => {
-                      const providerConfig = getProviderIcon(key.provider);
-                      const ProviderIcon = providerConfig.icon;
-
-                      return (
-                        <Card key={key.id} className="bg-muted/30">
-                          <CardContent className="flex items-center justify-between py-4">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-10 h-10 rounded-lg ${providerConfig.bgColor} flex items-center justify-center`}>
-                                <ProviderIcon className={`w-5 h-5 ${providerConfig.color}`} />
-                              </div>
-                              <div>
-                                <p className="font-medium">{key.name}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {providerConfig.displayName} • {key.keyPreview}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleCopyKey(key.keyPreview)}
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteApiKey(key.id)}
-                              >
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        );
-
-      case 'notifications':
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>
-                Choose how you want to be notified
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label className="font-medium">Email Notifications</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive email updates about your account activity
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setEmailNotifications(!emailNotifications)}
-                    className={cn(
-                      "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                      emailNotifications ? 'bg-primary' : 'bg-muted'
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                        emailNotifications ? 'translate-x-6' : 'translate-x-1'
-                      )}
-                    />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label className="font-medium">Push Notifications</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Receive push notifications on your devices
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setPushNotifications(!pushNotifications)}
-                    className={cn(
-                      "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                      pushNotifications ? 'bg-primary' : 'bg-muted'
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                        pushNotifications ? 'translate-x-6' : 'translate-x-1'
-                      )}
-                    />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label className="font-medium">Weekly Report</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Get a weekly summary of your activity
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setWeeklyReport(!weeklyReport)}
-                    className={cn(
-                      "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                      weeklyReport ? 'bg-primary' : 'bg-muted'
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                        weeklyReport ? 'translate-x-6' : 'translate-x-1'
-                      )}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button onClick={handleSaveNotifications} disabled={loading}>
-                  {loading ? 'Saving...' : 'Save Preferences'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        );
-
-      case 'security':
-        return (
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Security Settings</CardTitle>
-                <CardDescription>
-                  Manage your password and security preferences
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 border border-border rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <Key className="w-5 h-5 text-primary" />
-                      <div>
-                        <p className="font-medium">Password</p>
-                        <p className="text-sm text-muted-foreground">
-                          Last changed 3 months ago
-                        </p>
-                      </div>
-                    </div>
-                    <Button variant="outline">Change Password</Button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border border-border rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <Shield className="w-5 h-5 text-primary" />
-                      <div>
-                        <p className="font-medium">Two-Factor Authentication</p>
-                        <p className="text-sm text-muted-foreground">
-                          Add an extra layer of security
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary">Not Enabled</Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-destructive">
-              <CardHeader>
-                <CardTitle className="text-destructive">Danger Zone</CardTitle>
-                <CardDescription>
-                  Irreversible and destructive actions
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Delete Account</p>
-                    <p className="text-sm text-muted-foreground">
-                      Permanently delete your account and all data
-                    </p>
-                  </div>
-                  <Button variant="destructive">Delete Account</Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        );
-
-      case 'billing':
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Current Plan</CardTitle>
-              <CardDescription>
-                You are currently on the Pro plan
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 border-2 border-primary rounded-lg bg-primary/5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="text-2xl font-bold">Pro Plan</h3>
-                      <Badge>Current</Badge>
-                    </div>
-                    <p className="text-3xl font-bold mb-2">
-                      $49<span className="text-lg font-normal text-muted-foreground">/month</span>
-                    </p>
-                    <ul className="space-y-1 text-sm">
-                      <li className="flex items-center">
-                        <Check className="w-4 h-4 mr-2 text-green-600" />
-                        Unlimited AI Credits
-                      </li>
-                      <li className="flex items-center">
-                        <Check className="w-4 h-4 mr-2 text-green-600" />
-                        Advanced Analytics
-                      </li>
-                      <li className="flex items-center">
-                        <Check className="w-4 h-4 mr-2 text-green-600" />
-                        Priority Support
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground mb-2">Next billing date</p>
-                    <p className="font-medium">March 15, 2025</p>
-                    <Button variant="outline" className="mt-4">Manage Plan</Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-semibold flex items-center">
-                  <CreditCard className="w-4 h-4 mr-2 text-primary" />
-                  Payment Method
-                </h4>
-                <div className="flex items-center justify-between p-3 border border-border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-muted rounded flex items-center justify-center">
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-medium">•••• •••• •••• 4242</p>
-                      <p className="text-sm text-muted-foreground">Expires 12/2025</p>
-                    </div>
-                  </div>
-                  <Button variant="outline">Update</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-
-      case 'appearance':
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Appearance Settings</CardTitle>
-              <CardDescription>
-                Customize how AssetWorks looks on your device
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <Label className="text-base font-semibold">Theme</Label>
-                <div className="grid grid-cols-3 gap-4">
-                  <button
-                    onClick={() => setTheme('light')}
-                    className={cn(
-                      "p-3 border-2 rounded-lg transition-all",
-                      theme === 'light' ? 'border-primary bg-primary/5' : 'border-border'
-                    )}
-                  >
-                    <Sun className="w-6 h-6 mx-auto mb-2" />
-                    <p className="font-medium">Light</p>
-                  </button>
-                  <button
-                    disabled
-                    className="p-3 border-2 rounded-lg transition-all border-border opacity-60 cursor-not-allowed relative"
-                  >
-                    <Badge
-                      variant="secondary"
-                      className="absolute -top-2 -right-2 text-[10px] px-1.5 py-0.5"
-                    >
-                      Soon
-                    </Badge>
-                    <Moon className="w-6 h-6 mx-auto mb-2" />
-                    <p className="font-medium">Dark</p>
-                  </button>
-                  <button
-                    onClick={() => setTheme('system')}
-                    className={cn(
-                      "p-3 border-2 rounded-lg transition-all",
-                      theme === 'system' ? 'border-primary bg-primary/5' : 'border-border'
-                    )}
-                  >
-                    <Monitor className="w-6 h-6 mx-auto mb-2" />
-                    <p className="font-medium">System</p>
-                  </button>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Dark mode is coming soon! We're working hard to bring you a beautiful dark theme.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        );
-
-      default:
-        return null;
-    }
-  }
 }

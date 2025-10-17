@@ -49,7 +49,7 @@ useEffect(() => {
 ```
 
 ### 2. Updated Page Component
-**File**: `/app/financial-playground-v2/page.tsx`
+**File**: `/app/financial-playground/page.tsx`
 
 Passed messages prop to ReportDisplay:
 ```typescript
@@ -79,7 +79,7 @@ Passed messages prop to ReportDisplay:
 ## Next Steps
 
 To fully test the fix:
-1. Navigate to http://localhost:3001/financial-playground-v2
+1. Navigate to http://localhost:3001/financial-playground
 2. Create or select a thread
 3. Send a message requesting a financial report
 4. Watch the streaming progress indicator

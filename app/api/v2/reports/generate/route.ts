@@ -5,16 +5,20 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
+import { getServerSessionWithDev } from '@/lib/auth/dev-auth';
 import { z } from 'zod';
 import { ReportGenerationService, ReportOptionsSchema } from '@/lib/services/report-generation.service';
+import StructuredReportService from '@/lib/services/structured-report-generation.service';
 import { ErrorHandler, AppErrors, LoggingService, PerformanceMonitor } from '@/lib/services/error-logging.service';
 import { RateLimitService } from '@/lib/services/redis.service';
+import { prisma } from '@/lib/db/prisma';
 
 // Request validation schema
 const GenerateReportRequestSchema = z.object({
   threadId: z.string().optional(),
   prompt: z.string().min(10).max(5000),
-  model: z.enum(['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307']).optional(),
+  model: z.enum(['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307', 'claude-3-sonnet-20240229']).optional(),
   systemPrompt: z.string().optional(),
   options: z.object({
     stream: z.boolean().default(true),
@@ -33,14 +37,17 @@ export async function POST(request: NextRequest) {
   PerformanceMonitor.start(operationId);
 
   try {
-    // 1. Authentication
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    // 1. Authentication - session already contains user.id from JWT callback
+    const session = await getServerSessionWithDev(authOptions);
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
+    const userId = session.user.id;
+    const userEmail = session.user.email || '';
+
     // 2. Rate limiting
-    const rateLimitKey = `report-gen:${session.user.email}`;
+    const rateLimitKey = `report-gen:${userEmail}`;
     // Higher limit for development
     const isDevelopment = process.env.NODE_ENV === 'development';
     const { limited, remaining } = await RateLimitService.isLimited(
@@ -61,7 +68,7 @@ export async function POST(request: NextRequest) {
     LoggingService.logRequest(
       'POST',
       '/api/v2/reports/generate',
-      session.user.email,
+      userEmail,
       {
         prompt: validatedRequest.prompt.substring(0, 100),
         options: validatedRequest.options,
@@ -73,7 +80,7 @@ export async function POST(request: NextRequest) {
       prompt: validatedRequest.prompt,
       systemPrompt: validatedRequest.systemPrompt,
       threadId: validatedRequest.threadId,
-      model: validatedRequest.model || 'claude-3-opus-20240229',
+      model: validatedRequest.model || 'claude-3-5-sonnet-20241022',
       maxTokens: 8000,
       temperature: 0.7,
       stream: validatedRequest.options?.stream ?? true,
@@ -84,7 +91,50 @@ export async function POST(request: NextRequest) {
       format: validatedRequest.options?.format || 'html',
     };
 
-    // 6. Stream or batch generation
+    // 6. Handle JSON structured reports separately
+    if (reportOptions.format === 'json') {
+      // Use structured report service for JSON format
+      const result = await StructuredReportService.generateAndSaveReport(
+        userId,
+        reportOptions.threadId || 'temp-thread',
+        reportOptions.prompt,
+        {
+          model: reportOptions.model,
+          maxTokens: reportOptions.maxTokens,
+          temperature: reportOptions.temperature,
+          language: reportOptions.language,
+        }
+      );
+
+      const duration = PerformanceMonitor.end(operationId, {
+        userId,
+        prompt: validatedRequest.prompt.substring(0, 100),
+      });
+
+      LoggingService.logResponse(
+        'POST',
+        '/api/v2/reports/generate',
+        200,
+        duration,
+        userEmail
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          reportId: result.reportId,
+          threadId: reportOptions.threadId,
+          format: 'json',
+          structuredData: result.structuredData,
+        },
+        meta: {
+          rateLimitRemaining: remaining,
+          generationTime: duration,
+        },
+      });
+    }
+
+    // 7. Stream or batch generation for HTML/Markdown
     if (reportOptions.stream) {
       // Create a TransformStream for streaming response
       const encoder = new TextEncoder();
@@ -93,9 +143,9 @@ export async function POST(request: NextRequest) {
 
       // Start report generation in background
       (async () => {
-        try {
+        try{
           const reportIterator = await ReportGenerationService.generateReport(
-            session.user!.id || session.user!.email!,
+            userId,
             reportOptions
           );
 
@@ -144,7 +194,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Batch generation
       const reportIterator = await ReportGenerationService.generateReport(
-        session.user.id || session.user.email!,
+        userId,
         reportOptions
       );
 
@@ -156,7 +206,7 @@ export async function POST(request: NextRequest) {
       }
 
       const duration = PerformanceMonitor.end(operationId, {
-        userId: session.user.email,
+        userId,
         prompt: validatedRequest.prompt.substring(0, 100),
       });
 
@@ -165,7 +215,7 @@ export async function POST(request: NextRequest) {
         '/api/v2/reports/generate',
         200,
         duration,
-        session.user.email
+        userEmail
       );
 
       return NextResponse.json({
@@ -181,7 +231,7 @@ export async function POST(request: NextRequest) {
     const duration = PerformanceMonitor.end(operationId);
 
     LoggingService.error('Report generation failed', error as Error, {
-      userId: (await getServerSession())?.user?.email,
+      userId: (await getServerSessionWithDev(authOptions))?.user?.email,
     });
 
     if (error instanceof z.ZodError) {

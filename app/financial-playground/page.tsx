@@ -87,11 +87,46 @@ import {
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import dynamic from 'next/dynamic';
 import { useWebSocket, useThreadWebSocket, WSEvents, ConnectionStatus } from '@/lib/websocket/client';
 import { EnhancedThreadList } from '@/components/financial-playground/EnhancedThreadList';
 import { ThreadListSkeleton } from '@/components/financial-playground/ThreadSkeleton';
+import { ProgressiveLoader, useProgressiveLoader } from '@/components/ui/progressive-loader';
+import { MessageList } from './components/MessageList';
+import { EntityBar } from './components/EntityBar';
 
-// Types
+// Dynamic import for ReportGenerator to reduce initial bundle size
+const ReportGenerator = dynamic(() => import('./components/ReportGenerator').then(mod => ({ default: mod.ReportGenerator })), {
+  loading: () => (
+    <div className="flex gap-3 mb-6">
+      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center flex-shrink-0">
+        <Loader2 className="w-4 h-4 animate-spin" />
+      </div>
+      <div className="flex-1 max-w-[85%]">
+        <div className="inline-block px-4 py-3 rounded-2xl bg-muted">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-sm text-muted-foreground">Initializing report generator...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  ),
+  ssr: false,
+});
+import type {
+  Report,
+  Entity,
+  SystemPrompt,
+  Message,
+  SystemPromptWithIcon,
+  WSMessageCreatedEvent,
+  WSThreadUpdatedEvent,
+  WSEntityExtractedEvent,
+} from './components/types';
+import ErrorBoundary from '@/components/error-boundary';
+
+// Additional local types (most types are imported from ./components/types)
 interface Thread {
   id: string;
   title: string;
@@ -109,215 +144,19 @@ interface Thread {
   };
 }
 
-interface Message {
-  id: string;
-  threadId: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  metadata?: {
-    model?: string;
-    tokens?: number;
-    cost?: number;
-    entities?: Entity[];
-  };
-  createdAt: string;
-}
-
-interface Report {
-  id: string;
-  threadId: string;
-  title: string;
-  content: string;
-  format: 'html' | 'markdown' | 'json';
-  sections: Section[];
-  entities: Entity[];
-  insights: Insight[];
-  metadata: {
-    model: string;
-    tokens: number;
-    cost: number;
-    generationTime: number;
-  };
-  createdAt: string;
-}
-
-interface Section {
-  id: string;
-  title: string;
-  content: string;
-  type: 'text' | 'chart' | 'table' | 'metric' | 'insight';
-  order: number;
-  data?: any;
-}
-
-interface Entity {
-  id: string;
-  name: string;
-  type: 'COMPANY' | 'STOCK' | 'PERSON' | 'PRODUCT' | 'CRYPTOCURRENCY' | 'INDEX';
-  ticker?: string;
-  description?: string;
-  sentiment?: number;
-  relevance?: number;
-  metadata?: Record<string, any>;
-}
-
-interface Insight {
-  id: string;
-  type: 'trend' | 'risk' | 'opportunity' | 'metric';
-  severity: 'info' | 'warning' | 'critical' | 'success';
-  title: string;
-  description: string;
-}
-
-interface SystemPrompt {
-  id: string;
-  name: string;
-  description: string;
-  content: string;
-  icon: React.ElementType;
-  category: 'financial' | 'general' | 'technical' | 'creative';
-}
-
-// System Prompts
-const SYSTEM_PROMPTS: SystemPrompt[] = [
-  {
-    id: 'financial-analyst',
-    name: 'Financial Analyst',
-    description: 'Expert financial analysis and market insights',
-    content: 'You are a world-class financial analyst with deep expertise in market analysis, financial modeling, and investment strategies. Provide comprehensive, data-driven insights with clear recommendations.',
-    icon: Database,
-    category: 'financial',
-  },
-  {
-    id: 'market-researcher',
-    name: 'Market Researcher',
-    description: 'In-depth market research and competitive analysis',
-    content: 'You are a senior market researcher specializing in industry analysis, competitive intelligence, and market trends. Focus on actionable insights and strategic recommendations.',
-    icon: Search,
-    category: 'financial',
-  },
-  {
-    id: 'risk-advisor',
-    name: 'Risk Advisor',
-    description: 'Risk assessment and mitigation strategies',
-    content: 'You are a risk management expert focused on identifying, analyzing, and mitigating financial and operational risks. Provide balanced risk assessments with clear mitigation strategies.',
-    icon: Shield,
-    category: 'financial',
-  },
-  {
-    id: 'general-assistant',
-    name: 'General Assistant',
-    description: 'Helpful AI assistant for any task',
-    content: 'You are a helpful AI assistant. Be concise, accurate, and provide well-structured responses.',
-    icon: Bot,
-    category: 'general',
-  },
-];
-
-// Token Counter Component
-const TokenCounter: React.FC<{ tokens: { input: number; output: number; total: number }, cost: number }> = ({ tokens, cost }) => (
-  <motion.div
-    initial={{ opacity: 0, y: -10 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="flex items-center gap-4 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full"
-  >
-    <div className="flex items-center gap-1">
-      <Gauge className="w-3 h-3" />
-      <span>{tokens.input.toLocaleString()} in</span>
-    </div>
-    <Separator orientation="vertical" className="h-3" />
-    <div className="flex items-center gap-1">
-      <span>{tokens.output.toLocaleString()} out</span>
-    </div>
-    <Separator orientation="vertical" className="h-3" />
-    <div className="flex items-center gap-1">
-      <span className="font-medium">{tokens.total.toLocaleString()} total</span>
-    </div>
-    {cost > 0 && (
-      <>
-        <Separator orientation="vertical" className="h-3" />
-        <span className="text-green-600 font-medium">${cost.toFixed(4)}</span>
-      </>
-    )}
-  </motion.div>
-);
-
-// Entity Chip Component
-const EntityChip: React.FC<{ entity: Entity; onClick: () => void }> = ({ entity, onClick }) => {
-  const getEntityIcon = () => {
-    switch (entity.type) {
-      case 'COMPANY':
-        return <Building className="w-3 h-3" />;
-      case 'STOCK':
-        return <Hash className="w-3 h-3" />;
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <motion.button
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium",
-        "bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100",
-        "dark:from-blue-950/50 dark:to-indigo-950/50 dark:hover:from-blue-900/50 dark:hover:to-indigo-900/50",
-        "border border-blue-200 dark:border-blue-800",
-        "transition-all duration-200"
-      )}
-    >
-      {getEntityIcon()}
-      <span>{entity.name}</span>
-      {entity.ticker && <span className="opacity-60">({entity.ticker})</span>}
-      {entity.sentiment && (
-        <span className={cn(
-          "ml-1 px-1.5 py-0.5 rounded text-[10px]",
-          entity.sentiment > 0 ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400" :
-          entity.sentiment < 0 ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400" :
-          "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
-        )}>
-          {entity.sentiment > 0 ? '+' : ''}{(entity.sentiment * 100).toFixed(0)}%
-        </span>
-      )}
-    </motion.button>
-  );
-};
-
-export default function FinancialPlaygroundClean() {
+// Main Component
+function FinancialPlayground() {
+  // Session and routing
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Core state
-  const [threads, setThreads] = useState<Thread[]>([]);
-  const [currentThread, setCurrentThread] = useState<Thread | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [currentReport, setCurrentReport] = useState<Report | null>(null);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingThreads, setIsLoadingThreads] = useState(true);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // WebSocket integration
-  const { status: wsStatus, on, off, emit, isConnected } = useWebSocket({
-    autoConnect: true,
-    onConnect: () => toast.success('Real-time updates connected', { duration: 2000 }),
-    onDisconnect: () => console.log('WebSocket disconnected'),
-  });
-  const { typingUsers, sendTyping } = useThreadWebSocket(currentThread?.id || null);
-
-  // Streaming state
-  const [streamingContent, setStreamingContent] = useState('');
-  const [streamingTokens, setStreamingTokens] = useState({ input: 0, output: 0, total: 0 });
-  const [streamingCost, setStreamingCost] = useState(0);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // System Prompts
+  const [systemPrompts, setSystemPrompts] = useState<SystemPromptWithIcon[]>([]);
 
   // System prompt state
-  const [selectedPrompt, setSelectedPrompt] = useState<SystemPrompt>(SYSTEM_PROMPTS[0]);
-  const [selectedModel, setSelectedModel] = useState('claude-3-sonnet-20240229');
+  const [selectedPrompt, setSelectedPrompt] = useState<SystemPromptWithIcon | null>(null);
+  const [selectedModel, setSelectedModel] = useState('claude-3-5-sonnet-20241022');
 
   // Entity state
   const [reportEntities, setReportEntities] = useState<Entity[]>([]);
@@ -326,10 +165,180 @@ export default function FinancialPlaygroundClean() {
   // UI state
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Thread state
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [currentThread, setCurrentThread] = useState<Thread | null>(null);
+  const [isLoadingThreads, setIsLoadingThreads] = useState(false);
+  const [isLoadingCurrentThread, setIsLoadingCurrentThread] = useState(false);
+
+  // Message state
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
+  const [inputMessage, setInputMessage] = useState('');
+
+  // Report state
+  const [currentReport, setCurrentReport] = useState<Report | null>(null);
+  const [pendingReportGeneration, setPendingReportGeneration] = useState<{
+    threadId: string;
+    prompt: string;
+    model: string;
+    systemPrompt?: SystemPromptWithIcon | null;
+  } | null>(null);
+
+  // WebSocket connection
+  const { isConnected, on, off } = useWebSocket();
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Helper functions for managing messages
+  const loadThread = async (threadId: string) => {
+    setIsLoadingCurrentThread(true);
+    try {
+      const response = await fetch(`/api/v2/threads/${threadId}`, {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentThread(data.thread);
+        setMessages(data.messages || []);
+        return data;
+      }
+    } catch (error) {
+      console.error('Failed to load thread:', error);
+      toast.error('Failed to load conversation');
+    } finally {
+      setIsLoadingCurrentThread(false);
+    }
+    return null;
+  };
+
+  const loadMoreMessages = async () => {
+    if (!currentThread || isLoadingMoreMessages) return;
+
+    setIsLoadingMoreMessages(true);
+    try {
+      const oldestMessage = messages[0];
+      const response = await fetch(`/api/v2/threads/${currentThread.id}/messages?before=${oldestMessage?.id}`, {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMessages([...data.messages, ...messages]);
+        setHasMoreMessages(data.hasMore);
+      }
+    } catch (error) {
+      console.error('Failed to load more messages:', error);
+    } finally {
+      setIsLoadingMoreMessages(false);
+    }
+  };
+
+  const sendMessage = async (content?: string) => {
+    const messageContent = content || inputMessage;
+    if (!messageContent.trim()) return;
+
+    console.log('[FinancialPlayground] sendMessage called:', {
+      messagePreview: messageContent.substring(0, 50) + '...',
+      hasCurrentThread: !!currentThread,
+      currentThreadId: currentThread?.id,
+    });
+
+    // Create or use existing thread
+    let threadId = currentThread?.id;
+    if (!threadId) {
+      console.log('[FinancialPlayground] No current thread, creating new thread...');
+      const newThread = await createNewThread();
+      if (!newThread) {
+        console.error('[FinancialPlayground] Failed to create new thread');
+        return;
+      }
+      threadId = newThread.id;
+      console.log('[FinancialPlayground] New thread created:', threadId);
+    }
+
+    // Create user message
+    const tempId = `temp-${Date.now()}`;
+    const userMessage: Message = {
+      id: tempId,
+      threadId: threadId,
+      role: 'user',
+      content: messageContent,
+      createdAt: new Date().toISOString(),
+      status: 'sending',
+    };
+
+    console.log('[FinancialPlayground] Adding user message to state:', tempId);
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+
+    try {
+      // Save user message to database
+      console.log('[FinancialPlayground] Saving message to database...');
+      const response = await fetch('/api/v2/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          threadId: threadId,
+          role: 'user',
+          content: messageContent,
+        }),
+      });
+
+      if (response.ok) {
+        const { data: savedMessage } = await response.json();
+        console.log('[FinancialPlayground] Message saved successfully:', savedMessage.id);
+
+        // Update message with saved ID
+        setMessages(prev => prev.map(m =>
+          m.id === tempId ? { ...m, id: savedMessage.id, status: 'sent' } : m
+        ));
+
+        // Trigger report generation
+        console.log('[FinancialPlayground] Setting pendingReportGeneration:', {
+          threadId,
+          prompt: messageContent.substring(0, 50) + '...',
+          model: selectedModel,
+          promptName: selectedPrompt?.name,
+        });
+        setPendingReportGeneration({
+          threadId,
+          prompt: messageContent,
+          model: selectedModel,
+          systemPrompt: selectedPrompt,
+        });
+      } else {
+        throw new Error('Failed to save message');
+      }
+    } catch (error) {
+      console.error('[FinancialPlayground] Error sending message:', error);
+      setMessages(prev => prev.map(m =>
+        m.id === tempId ? { ...m, status: 'failed' } : m
+      ));
+      toast.error('Failed to send message');
+    }
+  };
+
+  const retrySendMessage = async (message: Message) => {
+    setMessages(prev => prev.filter(m => m.id !== message.id));
+    setInputMessage(message.content);
+    await sendMessage(message.content);
+  };
+
+  // Load threads on mount
+  useEffect(() => {
+    if (status === 'authenticated') {
+      loadThreads();
+    }
+  }, [status]);
 
   // Authentication check
   useEffect(() => {
@@ -338,18 +347,31 @@ export default function FinancialPlaygroundClean() {
     }
   }, [status, router]);
 
-  // Load threads on mount and check URL for thread parameter
+  // Load system prompts on mount
   useEffect(() => {
-    if (session) {
-      loadThreads().then(() => {
-        // Check if there's a thread ID in the URL
-        const threadId = searchParams.get('thread');
-        if (threadId) {
-          loadThread(threadId);
+    const loadSystemPrompts = async () => {
+      try {
+        const response = await fetch('/api/v2/prompts');
+        if (response.ok) {
+          const data = await response.json();
+          const promptsWithIcons: SystemPromptWithIcon[] = data.map((prompt: SystemPrompt & { icon?: string }) => {
+            let icon = Bot;
+            if (prompt.icon === 'Database') icon = Database;
+            if (prompt.icon === 'Search') icon = Search;
+            if (prompt.icon === 'Shield') icon = Shield;
+            return { ...prompt, icon };
+          });
+          setSystemPrompts(promptsWithIcons);
+          setSelectedPrompt(promptsWithIcons[0]);
         }
-      });
-    }
-  }, [session]);
+      } catch (error) {
+        console.error('Failed to load system prompts:', error);
+        toast.error('Failed to load system prompts');
+      }
+    };
+
+    loadSystemPrompts();
+  }, []);
 
   // Handle browser navigation (back/forward)
   useEffect(() => {
@@ -359,7 +381,15 @@ export default function FinancialPlaygroundClean() {
     if (threadId) {
       // If there's a thread ID in the URL, load it if it's different from current
       if (currentThread?.id !== threadId) {
-        loadThread(threadId);
+        loadThread(threadId).then((data) => {
+          if (data) {
+            setCurrentThread(data.thread);
+            setCurrentReport(data.report || null);
+            if (data.report?.entities) {
+              setReportEntities(data.report.entities);
+            }
+          }
+        });
       }
     } else {
       // If no thread ID in URL, clear the current thread
@@ -369,19 +399,33 @@ export default function FinancialPlaygroundClean() {
         setCurrentReport(null);
       }
     }
-  }, [searchParams, session, isLoadingThreads]);
+  }, [searchParams, session, isLoadingThreads, currentThread, loadThread, setMessages]);
 
   // Auto-scroll messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingContent]);
+  }, [messages]);
+
+  // Debug: Log when pendingReportGeneration changes
+  useEffect(() => {
+    if (pendingReportGeneration) {
+      console.log('[FinancialPlayground] pendingReportGeneration state updated:', {
+        threadId: pendingReportGeneration.threadId,
+        prompt: pendingReportGeneration.prompt.substring(0, 50) + '...',
+        model: pendingReportGeneration.model,
+        systemPromptName: pendingReportGeneration.systemPrompt?.name,
+      });
+    } else {
+      console.log('[FinancialPlayground] pendingReportGeneration cleared');
+    }
+  }, [pendingReportGeneration]);
 
   // WebSocket event listeners
   useEffect(() => {
     if (!isConnected) return;
 
     // Listen for real-time message updates
-    const handleMessageCreated = (data: any) => {
+    const handleMessageCreated = (data: WSMessageCreatedEvent) => {
       // Only add message if it's not already in the list and from another source
       setMessages(prev => {
         if (prev.some(m => m.id === data.message.id)) return prev;
@@ -390,7 +434,7 @@ export default function FinancialPlaygroundClean() {
     };
 
     // Listen for thread updates
-    const handleThreadUpdated = (data: any) => {
+    const handleThreadUpdated = (data: WSThreadUpdatedEvent) => {
       if (data.threadId === currentThread?.id) {
         setCurrentThread(prev => prev ? { ...prev, ...data.changes } : null);
       }
@@ -401,7 +445,7 @@ export default function FinancialPlaygroundClean() {
     };
 
     // Listen for entity updates
-    const handleEntityExtracted = (data: any) => {
+    const handleEntityExtracted = (data: WSEntityExtractedEvent) => {
       if (data.reportId === currentReport?.id) {
         setReportEntities(prev => [...prev, ...data.entities]);
       }
@@ -416,7 +460,7 @@ export default function FinancialPlaygroundClean() {
       off('thread:updated', handleThreadUpdated);
       off('entity:extracted', handleEntityExtracted);
     };
-  }, [isConnected, currentThread, currentReport, on, off]);
+  }, [isConnected, currentThread, currentReport, on, off, setMessages]);
 
   // API calls
   const loadThreads = async () => {
@@ -472,8 +516,76 @@ export default function FinancialPlaygroundClean() {
     setIsMobileMenuOpen(false);
   };
 
+  // Report generation handlers
+  const handleReportComplete = (report: Report, message: Message) => {
+    setCurrentReport(report);
+    setMessages(prev => [...prev, message]);
+    setPendingReportGeneration(null);
+    if (report.entities) {
+      setReportEntities(report.entities);
+    }
+  };
+
+  const handleEntityExtracted = (entity: Entity) => {
+    setReportEntities(prev => [...prev, entity]);
+  };
+
+  const handleReportCancel = () => {
+    setPendingReportGeneration(null);
+  };
+
+  // Message action handlers
+  const handleMessageEdit = (message: Message) => {
+    // For now, set the message content in input for editing
+    setInputMessage(message.content.replace(/<[^>]*>/g, '')); // Strip HTML
+    // TODO: Could implement in-place editing in future
+  };
+
+  const handleMessageDelete = async (message: Message) => {
+    try {
+      const response = await fetch(`/api/v2/messages/${message.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        setMessages(prev => prev.filter(m => m.id !== message.id));
+        toast.success('Message deleted');
+      }
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+      toast.error('Failed to delete message');
+    }
+  };
+
+  const handleMessageCopy = (message: Message) => {
+    // Copy is handled internally by MessageList component
+    // This is just for tracking/analytics if needed
+  };
+
+  const handleMessageRegenerate = async (message: Message) => {
+    // Find the previous user message
+    const messageIndex = messages.findIndex(m => m.id === message.id);
+    if (messageIndex > 0) {
+      const previousMessage = messages[messageIndex - 1];
+      if (previousMessage.role === 'user') {
+        // Remove the assistant message and regenerate
+        setMessages(prev => prev.filter(m => m.id !== message.id));
+
+        // Trigger new report generation
+        setPendingReportGeneration({
+          threadId: message.threadId,
+          prompt: previousMessage.content,
+          model: selectedModel,
+          systemPrompt: selectedPrompt,
+        });
+      }
+    }
+  };
+
   const createNewThread = async () => {
     try {
+      console.log('[FinancialPlayground] Creating new thread...');
       const response = await fetch('/api/v2/threads', {
         method: 'POST',
         headers: {
@@ -482,13 +594,15 @@ export default function FinancialPlaygroundClean() {
         credentials: 'include',
         body: JSON.stringify({
           title: 'New Financial Report',
-          description: `Created with ${selectedPrompt.name} prompt`,
+          description: `Created with ${selectedPrompt?.name} prompt`,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
         const newThread = data.data;
+        console.log('[FinancialPlayground] Thread created successfully:', newThread.id);
+
         setThreads([newThread, ...threads]);
         setCurrentThread(newThread);
         setMessages([]);
@@ -497,267 +611,22 @@ export default function FinancialPlaygroundClean() {
         // Update URL with new thread ID
         const params = new URLSearchParams(searchParams.toString());
         params.set('thread', newThread.id);
-        router.push(`/financial-playground?${params.toString()}`);
+        const newUrl = `/financial-playground?${params.toString()}`;
+        console.log('[FinancialPlayground] Updating URL to:', newUrl);
+        router.push(newUrl);
 
         toast.success('New conversation created');
         inputRef.current?.focus();
         return newThread; // Return the created thread
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[FinancialPlayground] Failed to create thread:', response.status, errorData);
       }
       return null;
     } catch (error) {
-      console.error('Failed to create thread:', error);
+      console.error('[FinancialPlayground] Error creating thread:', error);
       toast.error('Failed to create conversation');
       return null;
-    }
-  };
-
-  const loadThread = async (threadId: string) => {
-    try {
-      const response = await fetch(`/api/v2/threads/${threadId}`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentThread(data.thread);
-
-        // Messages are already loaded from the thread API
-        const loadedMessages = data.messages || [];
-        setMessages(loadedMessages.map((msg: any) => ({
-          ...msg,
-          role: msg.role.toLowerCase() as 'user' | 'assistant' | 'system',
-        })));
-
-        setCurrentReport(data.report || null);
-
-        if (data.report?.entities) {
-          setReportEntities(data.report.entities);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load thread:', error);
-      toast.error('Failed to load conversation');
-    }
-  };
-
-  const sendMessage = async () => {
-    if (!inputMessage.trim()) return;
-
-    // Auto-create thread if none exists
-    let activeThread = currentThread;
-    if (!activeThread) {
-      const newThread = await createNewThread();
-      if (!newThread) {
-        toast.error('Failed to create conversation thread');
-        return;
-      }
-      activeThread = newThread;
-    }
-
-    const userMessage = inputMessage.trim();
-    setInputMessage('');
-    setIsLoading(true);
-    setStreamingContent('');
-    setStreamingTokens({ input: 0, output: 0, total: 0 });
-    setStreamingCost(0);
-
-    // Save user message to database
-    let userMessageId = `temp-${Date.now()}`;
-    try {
-      const messageResponse = await fetch('/api/v2/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          threadId: activeThread.id,
-          role: 'user',
-          content: userMessage,
-        }),
-      });
-
-      if (messageResponse.ok) {
-        const { data } = await messageResponse.json();
-        userMessageId = data.id;
-      }
-    } catch (error) {
-      console.error('Failed to save user message:', error);
-    }
-
-    // Add user message to UI
-    const tempMessage: Message = {
-      id: userMessageId,
-      threadId: activeThread.id,
-      role: 'user',
-      content: userMessage,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages(prev => [...prev, tempMessage]);
-
-    // Create abort controller
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    try {
-      const response = await fetch('/api/v2/reports/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          threadId: activeThread.id,
-          prompt: userMessage,
-          model: selectedModel,
-          systemPrompt: selectedPrompt.content,
-          options: {
-            stream: true,
-            extractEntities: true,
-            generateCharts: true,
-            includeMarketData: false, // Removed as requested
-            language: 'en',
-            format: 'html',
-          },
-        }),
-        signal: abortController.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to generate report: ${response.statusText}`);
-      }
-
-      // Process streaming response
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let accumulated = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-
-                switch (data.type) {
-                  case 'start':
-                    toast.success('Starting report generation', { id: 'generation' });
-                    break;
-
-                  case 'content':
-                    accumulated += data.content;
-                    setStreamingContent(accumulated);
-                    break;
-
-                  case 'tokens':
-                    setStreamingTokens({
-                      input: data.tokens.input || 0,
-                      output: data.tokens.output || 0,
-                      total: (data.tokens.input || 0) + (data.tokens.output || 0),
-                    });
-                    setStreamingCost(data.cost || 0);
-                    break;
-
-                  case 'entity':
-                    setReportEntities(prev => [...prev, data.entity]);
-                    break;
-
-                  case 'complete':
-                    // Save assistant message to database
-                    try {
-                      const assistantResponse = await fetch('/api/v2/messages', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                          threadId: activeThread.id,
-                          role: 'assistant',
-                          content: accumulated,
-                          metadata: {
-                            model: selectedModel,
-                            tokens: streamingTokens.total,
-                            cost: streamingCost,
-                            reportId: data.reportId,
-                          },
-                        }),
-                      });
-
-                      if (assistantResponse.ok) {
-                        const { data: savedMessage } = await assistantResponse.json();
-                        const assistantMessage: Message = {
-                          id: savedMessage.id,
-                          threadId: activeThread.id,
-                          role: 'assistant',
-                          content: accumulated,
-                          metadata: {
-                            model: selectedModel,
-                            tokens: streamingTokens.total,
-                            cost: streamingCost,
-                          },
-                          createdAt: savedMessage.createdAt,
-                        };
-                        setMessages(prev => [...prev, assistantMessage]);
-                      }
-                    } catch (error) {
-                      console.error('Failed to save assistant message:', error);
-                    }
-
-                    setCurrentReport({
-                      id: data.reportId,
-                      threadId: activeThread.id,
-                      title: activeThread.title,
-                      content: accumulated,
-                      format: 'html',
-                      sections: [],
-                      entities: reportEntities,
-                      insights: [],
-                      metadata: {
-                        model: selectedModel,
-                        tokens: streamingTokens.total,
-                        cost: streamingCost,
-                        generationTime: data.generationTime || 0,
-                      },
-                      createdAt: new Date().toISOString(),
-                    });
-
-                    setStreamingContent('');
-                    toast.success('Report generated successfully', { id: 'generation' });
-                    break;
-
-                  case 'error':
-                    toast.error(data.message || 'Generation error', { id: 'generation' });
-                    break;
-                }
-              } catch (e) {
-                console.error('Error parsing SSE:', e);
-              }
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        toast.success('Generation stopped', { id: 'generation' });
-      } else {
-        console.error('Error sending message:', error);
-        toast.error(error.message || 'Failed to generate report', { id: 'generation' });
-      }
-      setStreamingContent('');
-    } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
-  };
-
-  const stopGeneration = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setIsLoading(false);
-      setStreamingContent('');
     }
   };
 
@@ -842,7 +711,7 @@ export default function FinancialPlaygroundClean() {
         // Generate markdown
         content = `# ${currentThread.title}\n\n`;
         content += `**Created:** ${new Date(currentThread.createdAt).toLocaleString()}\n`;
-        content += `**System Prompt:** ${selectedPrompt.name}\n`;
+        content += `**System Prompt:** ${selectedPrompt?.name}\n`;
         content += `**Model:** ${selectedModel}\n\n`;
         content += `---\n\n`;
         content += `## Conversation\n\n`;
@@ -919,7 +788,6 @@ export default function FinancialPlaygroundClean() {
     }
   };
 
-
   if (status === 'loading') {
     return (
       <div className="flex items-center justify-center h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
@@ -978,10 +846,7 @@ export default function FinancialPlaygroundClean() {
               </TooltipContent>
             </Tooltip>
 
-            {/* Token Counter */}
-            {streamingTokens.total > 0 && (
-              <TokenCounter tokens={streamingTokens} cost={streamingCost} />
-            )}
+            {/* Token Counter - removed as it's now handled by ReportGenerator */}
 
             {/* Export Dropdown */}
             <DropdownMenu>
@@ -1092,15 +957,19 @@ export default function FinancialPlaygroundClean() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm" className="h-8">
-                        <selectedPrompt.icon className="w-3 h-3 mr-2" />
-                        {selectedPrompt.name}
+                        {selectedPrompt && (
+                          <>
+                            <selectedPrompt.icon className="w-3 h-3 mr-2" />
+                            {selectedPrompt.name}
+                          </>
+                        )}
                         <ChevronDown className="w-3 h-3 ml-2" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-72 z-[100]">
                       <DropdownMenuLabel>System Prompts</DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      {SYSTEM_PROMPTS.map((prompt) => (
+                      {systemPrompts.map((prompt) => (
                         <DropdownMenuItem
                           key={prompt.id}
                           onClick={() => setSelectedPrompt(prompt)}
@@ -1111,7 +980,7 @@ export default function FinancialPlaygroundClean() {
                             <div className="font-medium text-sm">{prompt.name}</div>
                             <div className="text-xs text-muted-foreground">{prompt.description}</div>
                           </div>
-                          {selectedPrompt.id === prompt.id && (
+                          {selectedPrompt?.id === prompt.id && (
                             <div className="w-2 h-2 rounded-full bg-primary mt-1.5" />
                           )}
                         </DropdownMenuItem>
@@ -1127,7 +996,7 @@ export default function FinancialPlaygroundClean() {
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-sm">
-                      <p className="text-xs">{selectedPrompt.content}</p>
+                      <p className="text-xs">{selectedPrompt?.content || 'No prompt selected'}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -1138,6 +1007,7 @@ export default function FinancialPlaygroundClean() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="z-[100]">
+                    <SelectItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</SelectItem>
                     <SelectItem value="claude-3-opus-20240229">Claude 3 Opus</SelectItem>
                     <SelectItem value="claude-3-sonnet-20240229">Claude 3 Sonnet</SelectItem>
                     <SelectItem value="claude-3-haiku-20240307">Claude 3 Haiku</SelectItem>
@@ -1149,29 +1019,42 @@ export default function FinancialPlaygroundClean() {
             {/* Report View with Entities */}
             <div className="flex-1 flex flex-col min-h-0">
               {/* Entity Bar */}
-              {reportEntities.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="border-b px-4 py-3 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20"
-                >
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-xs font-medium text-muted-foreground">Entities:</span>
-                    {reportEntities.map(entity => (
-                      <EntityChip
-                        key={entity.id}
-                        entity={entity}
-                        onClick={() => setSelectedEntity(entity)}
-                      />
-                    ))}
-                  </div>
-                </motion.div>
-              )}
+              <EntityBar
+                entities={reportEntities}
+                onEntityClick={setSelectedEntity}
+              />
 
               {/* Messages/Report Area */}
               <ScrollArea className="flex-1">
                 <div className="max-w-4xl mx-auto p-4 md:p-8">
-                  {messages.length === 0 && !currentThread ? (
+                  {hasMoreMessages && (
+                    <div className="text-center mb-4">
+                      <Button onClick={loadMoreMessages} disabled={isLoadingMoreMessages}>
+                        {isLoadingMoreMessages ? (
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading...</>
+                        ) : (
+                          'Load More'
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                  {isLoadingCurrentThread ? (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="flex flex-col items-center justify-center min-h-[60vh]"
+                    >
+                      <ProgressiveLoader
+                        isLoading={isLoadingCurrentThread}
+                        message="Loading thread..."
+                        estimatedDuration={1000}
+                        variant="default"
+                        showElapsedTime={true}
+                        showEstimatedTime={true}
+                        className="max-w-md"
+                      />
+                    </motion.div>
+                  ) : messages.length === 0 && !currentThread ? (
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -1195,85 +1078,33 @@ export default function FinancialPlaygroundClean() {
                       </div>
                     </motion.div>
                   ) : (
-                    <AnimatePresence mode="popLayout">
-                      {messages.map((message, index) => (
-                        <motion.div
-                          key={message.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -20 }}
-                          transition={{ delay: index * 0.05 }}
-                          className={cn(
-                            "mb-6 flex gap-3",
-                            message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
-                          )}
-                        >
-                          {/* Avatar */}
-                          <div className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
-                            message.role === 'user'
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-gradient-to-br from-blue-600 to-indigo-600 text-white"
-                          )}>
-                            {message.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-                          </div>
+                    <>
+                      {/* Message List Component */}
+                      <MessageList
+                        messages={messages}
+                        isLoading={!!pendingReportGeneration}
+                        onRetry={retrySendMessage}
+                        onEdit={handleMessageEdit}
+                        onDelete={handleMessageDelete}
+                        onCopy={handleMessageCopy}
+                        onRegenerate={handleMessageRegenerate}
+                        showActions={true}
+                      />
 
-                          {/* Message Content */}
-                          <div className={cn(
-                            "flex-1 max-w-[85%]",
-                            message.role === 'user' ? 'text-right' : 'text-left'
-                          )}>
-                            <div className={cn(
-                              "inline-block px-4 py-3 rounded-2xl",
-                              message.role === 'user'
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted"
-                            )}>
-                              {message.role === 'assistant' && message.content.includes('<') ? (
-                                <div
-                                  className="prose prose-sm dark:prose-invert max-w-none"
-                                  dangerouslySetInnerHTML={{ __html: message.content }}
-                                />
-                              ) : (
-                                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                              )}
-                            </div>
-                            {message.metadata && (
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                {message.metadata.model} • {message.metadata.tokens} tokens
-                                {message.metadata.cost && ` • $${message.metadata.cost.toFixed(4)}`}
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      ))}
-
-                      {/* Streaming Content */}
-                      {streamingContent && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="mb-6 flex gap-3"
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center flex-shrink-0">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          </div>
-                          <div className="flex-1 max-w-[85%]">
-                            <div className="inline-block px-4 py-3 rounded-2xl bg-muted border border-primary/20">
-                              <div
-                                className="prose prose-sm dark:prose-invert max-w-none"
-                                dangerouslySetInnerHTML={{ __html: streamingContent }}
-                              />
-                            </div>
-                            {streamingTokens.total > 0 && (
-                              <div className="mt-2">
-                                <TokenCounter tokens={streamingTokens} cost={streamingCost} />
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
+                      {/* Report Generator Component */}
+                      {pendingReportGeneration && (
+                        <ReportGenerator
+                          threadId={pendingReportGeneration.threadId}
+                          prompt={pendingReportGeneration.prompt}
+                          model={pendingReportGeneration.model}
+                          systemPrompt={pendingReportGeneration.systemPrompt}
+                          onReportComplete={handleReportComplete}
+                          onEntityExtracted={handleEntityExtracted}
+                          onCancel={handleReportCancel}
+                          className="mb-6"
+                        />
                       )}
-                    </AnimatePresence>
+                    </>
                   )}
                   <div ref={messagesEndRef} />
                 </div>
@@ -1286,20 +1117,19 @@ export default function FinancialPlaygroundClean() {
                     ref={inputRef}
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(inputMessage)}
                     placeholder="Ask for financial insights..."
-                    disabled={isLoading}
+                    disabled={!!pendingReportGeneration}
                     className="flex-1"
                   />
-                  {isLoading && streamingContent ? (
-                    <Button onClick={stopGeneration} variant="destructive" size="icon">
-                      <StopCircle className="w-4 h-4" />
-                    </Button>
-                  ) : (
-                    <Button onClick={sendMessage} disabled={isLoading} size="icon">
-                      <Send className="w-4 h-4" />
-                    </Button>
-                  )}
+                  <Button
+                    onClick={() => sendMessage(inputMessage)}
+                    disabled={!!pendingReportGeneration || !inputMessage.trim()}
+                    size="icon"
+                    data-testid="send-button"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
             </div>
@@ -1341,6 +1171,7 @@ export default function FinancialPlaygroundClean() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="z-[100]">
+                    <SelectItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</SelectItem>
                     <SelectItem value="claude-3-opus-20240229">Claude 3 Opus</SelectItem>
                     <SelectItem value="claude-3-sonnet-20240229">Claude 3 Sonnet</SelectItem>
                     <SelectItem value="claude-3-haiku-20240307">Claude 3 Haiku</SelectItem>
@@ -1349,12 +1180,12 @@ export default function FinancialPlaygroundClean() {
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">Default System Prompt</label>
-                <Select value={selectedPrompt.id} onValueChange={(id) => setSelectedPrompt(SYSTEM_PROMPTS.find(p => p.id === id) || SYSTEM_PROMPTS[0])}>
+                <Select value={selectedPrompt?.id} onValueChange={(id) => setSelectedPrompt(systemPrompts.find(p => p.id === id) || null)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="z-[100]">
-                    {SYSTEM_PROMPTS.map(prompt => (
+                    {systemPrompts.map(prompt => (
                       <SelectItem key={prompt.id} value={prompt.id}>
                         {prompt.name}
                       </SelectItem>
@@ -1367,5 +1198,14 @@ export default function FinancialPlaygroundClean() {
         </Dialog>
       </div>
     </TooltipProvider>
+  );
+}
+
+// Export wrapped with Error Boundary for enhanced error handling
+export default function FinancialPlaygroundWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <FinancialPlayground />
+    </ErrorBoundary>
   );
 }

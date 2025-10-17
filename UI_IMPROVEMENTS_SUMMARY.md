@@ -22,12 +22,12 @@ Created utility functions to format AI model names by removing date suffixes:
 
 **Applied in**:
 - `/components/financial-playground/ReportDisplay.tsx` (line 295)
-- `/app/financial-playground-v2/page.tsx` (line 763)
+- `/app/financial-playground/page.tsx` (line 763)
 
 ---
 
 ### 2. Left Sidebar Thread List ✅
-**File**: `/app/financial-playground-v2/page.tsx` (lines 598-665)
+**File**: `/app/financial-playground/page.tsx` (lines 598-665)
 
 #### Visual Improvements:
 - **Better spacing**: Increased padding from `px-2 py-1.5` to `px-3 py-2.5`
@@ -53,7 +53,7 @@ Created utility functions to format AI model names by removing date suffixes:
 ---
 
 ### 3. Chat Interface & Message Bubbles ✅
-**File**: `/app/financial-playground-v2/page.tsx` (lines 742-814)
+**File**: `/app/financial-playground/page.tsx` (lines 742-814)
 
 #### Major Enhancements:
 
@@ -92,7 +92,7 @@ Created utility functions to format AI model names by removing date suffixes:
 ---
 
 ### 4. Thread Header ✅
-**File**: `/app/financial-playground-v2/page.tsx` (lines 672-732)
+**File**: `/app/financial-playground/page.tsx` (lines 672-732)
 
 #### Improvements:
 
@@ -228,7 +228,7 @@ Created utility functions to format AI model names by removing date suffixes:
 
 1. `/lib/utils/modelFormatter.ts` - NEW utility file
 2. `/components/financial-playground/ReportDisplay.tsx` - Model formatting applied
-3. `/app/financial-playground-v2/page.tsx` - Comprehensive UI updates
+3. `/app/financial-playground/page.tsx` - Comprehensive UI updates
 
 ---
 

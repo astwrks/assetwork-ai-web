@@ -16,7 +16,7 @@ This document outlines critical improvements needed for the AssetWorks financial
 ```
 
 ### 1.2 Component Refactoring
-Break down the 2,187-line financial-playground-v2/page.tsx into:
+Break down the 2,187-line financial-playground/page.tsx into:
 ```
 components/
 ├── playground/
@@ -208,7 +208,7 @@ module.exports = {
 
 ## 🔍 Code Smells to Fix
 
-1. **God Components**: Split financial-playground-v2/page.tsx
+1. **God Components**: Split financial-playground/page.tsx
 2. **Prop Drilling**: Implement Context/Zustand for state
 3. **Any Types**: 200+ instances of 'any' type
 4. **Console Logs**: 150+ console.log statements

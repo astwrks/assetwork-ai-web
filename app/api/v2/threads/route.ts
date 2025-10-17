@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
+import { getServerSessionWithDev } from '@/lib/auth/dev-auth';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { CacheService, CacheTTL } from '@/lib/services/redis.service';
@@ -33,21 +35,13 @@ export async function GET(request: NextRequest) {
   PerformanceMonitor.start(operationId);
 
   try {
-    // Authentication
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    // Authentication - session already contains user.id from JWT callback
+    const session = await getServerSessionWithDev(authOptions);
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     // Parse query parameters
     const searchParams = request.nextUrl.searchParams;
@@ -59,7 +53,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Check cache
-    const cacheKey = `threads:${user.id}:${JSON.stringify(filters)}`;
+    const cacheKey = `threads:${userId}:${JSON.stringify(filters)}`;
     const cached = await CacheService.get(cacheKey);
     if (cached) {
       PerformanceMonitor.end(operationId, { cached: true });
@@ -72,7 +66,7 @@ export async function GET(request: NextRequest) {
 
     // Build query
     const where: any = {
-      userId: user.id,
+      userId: userId,
     };
 
     if (filters.status) {
@@ -86,14 +80,21 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Fetch threads with message count
+    // Fetch threads with optimized select query
     const [threads, total] = await Promise.all([
       prisma.threads.findMany({
         where,
         take: filters.limit,
         skip: filters.offset,
         orderBy: { updatedAt: 'desc' },
-        include: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          metadata: true,
+          createdAt: true,
+          updatedAt: true,
           messages: {
             orderBy: { createdAt: 'desc' },
             take: 1,
@@ -140,12 +141,12 @@ export async function GET(request: NextRequest) {
     await CacheService.set(cacheKey, transformedThreads, CacheTTL.SHORT);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId,
       count: threads.length,
     });
 
     LoggingService.info('Threads fetched', {
-      userId: user.id,
+      userId,
       count: threads.length,
       duration,
     });
@@ -206,21 +207,13 @@ export async function POST(request: NextRequest) {
   PerformanceMonitor.start(operationId);
 
   try {
-    // Authentication
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    // Authentication - session already contains user.id from JWT callback
+    const session = await getServerSessionWithDev(authOptions);
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     // Parse and validate request
     const body = await request.json();
@@ -230,7 +223,7 @@ export async function POST(request: NextRequest) {
     const thread = await prisma.threads.create({
       data: {
         id: nanoid(),
-        userId: user.id,
+        userId: userId,
         title: validated.title,
         description: validated.description,
         status: 'ACTIVE',
@@ -241,23 +234,23 @@ export async function POST(request: NextRequest) {
     });
 
     // Clear cache
-    await CacheService.clearPattern(`threads:${user.id}:*`);
+    await CacheService.clearPattern(`threads:${userId}:*`);
 
     // Broadcast via WebSocket if available
     if (typeof process !== 'undefined' && (global as any).io) {
-      (global as any).io.to(`user:${user.id}`).emit('thread:created', {
+      (global as any).io.to(`user:${userId}`).emit('thread:created', {
         threadId: thread.id,
         title: thread.title,
       });
     }
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId,
       threadId: thread.id,
     });
 
     LoggingService.info('Thread created', {
-      userId: user.id,
+      userId,
       threadId: thread.id,
       title: thread.title,
       duration,

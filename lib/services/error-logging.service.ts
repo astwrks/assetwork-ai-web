@@ -114,8 +114,8 @@ export const AppErrors = {
     'Unauthorized access',
     'AUTH_UNAUTHORIZED',
     ErrorSeverity.MEDIUM,
-    ErrorCategory.AUTHORIZATION,
-    403
+    ErrorCategory.AUTHENTICATION,
+    401
   ),
 
   // Validation Errors

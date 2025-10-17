@@ -6,7 +6,7 @@
 
 #### Step 1: Check if you're logged in
 1. Open your browser
-2. Go to `http://localhost:3001/financial-playground-v2`
+2. Go to `http://localhost:3001/financial-playground`
 3. Open DevTools (F12)
 4. Check if you see a session/auth error in the console
 
@@ -26,14 +26,14 @@ Navigate to: `http://localhost:3001/api/test-session`
 
 **If you see `false` values**, you're NOT logged in. See "Login Issues" below.
 
-#### Step 3: Check MongoDB
+#### Step 3: Check PostgreSQL Connection
 ```bash
-# Test MongoDB connection
-mongosh mongodb://localhost:27017/assetworks --eval "db.stats()"
+# Test Prisma connection
+npx prisma studio
 ```
 
-**Expected**: Database stats (means MongoDB is working)  
-**Error**: Connection issues (see "MongoDB Issues" below)
+**Expected**: Prisma Studio opens at http://localhost:5555
+**Error**: Connection issues (see "Database Issues" below)
 
 #### Step 4: Check the API directly
 ```bash
@@ -86,54 +86,47 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
 
 ---
 
-## 🗄️ MongoDB Issues
+## 🗄️ Database Issues (PostgreSQL)
 
-### Problem: MongoDB not running
+### Problem: Cannot connect to database
 
-**Check status:**
+**Check DATABASE_URL in .env.local:**
 ```bash
-brew services list | grep mongodb
+cat .env.local | grep DATABASE_URL
 ```
 
-**Should show:**
-```
-mongodb-community  started  Victor  ~/Library/LaunchAgents/...
-```
-
-**If not running:**
+**Should include connection parameters:**
 ```bash
-brew services start mongodb-community
+DATABASE_URL=postgresql://...?sslmode=require&connect_timeout=30&pool_timeout=30&pgbouncer=true
+DIRECT_URL=postgresql://...?sslmode=require&connect_timeout=30
 ```
 
-**If not installed:**
+### Problem: Prisma Client errors
+
+**Regenerate Prisma Client:**
 ```bash
-brew install mongodb-community@7.0
-brew services start mongodb-community@7.0
+npx prisma generate
 ```
 
-### Problem: Connection string wrong
-
-**Check .env.local:**
+**Push schema changes:**
 ```bash
-cat .env.local | grep MONGODB_URI
+npx prisma db push
 ```
 
-**Should be:**
+### Problem: Connection timeout
+
+**Cause:** Neon serverless database might be in cold start
+
+**Solution:** Wait 5-10 seconds and retry. The database will wake up automatically.
+
+### Problem: Database schema out of sync
+
+**Reset and sync schema:**
 ```bash
-MONGODB_URI=mongodb://localhost:27017/assetworks
+npx prisma db push --force-reset
 ```
 
-### Problem: Database connection failing
-
-**Test connection manually:**
-```bash
-mongosh mongodb://localhost:27017/assetworks
-```
-
-**If error:**
-- MongoDB might not be running
-- Port 27017 might be in use
-- Firewall blocking connection
+**Warning:** This will delete all data. Only use in development!
 
 ---
 
@@ -220,10 +213,11 @@ location.reload();
 
 Before reporting an issue, verify:
 
-- [ ] MongoDB is running (`brew services list`)
+- [ ] PostgreSQL (Neon) connection working (`npx prisma studio`)
 - [ ] Dev server is running (`ps aux | grep "next dev"`)
 - [ ] You're logged in (check `/api/test-session`)
-- [ ] .env.local has all required variables
+- [ ] .env.local has all required variables (DATABASE_URL, DIRECT_URL)
+- [ ] Prisma Client generated (`npx prisma generate`)
 - [ ] Browser cache cleared (Cmd+Shift+R)
 - [ ] No console errors in browser DevTools
 - [ ] Tried in incognito/private window
@@ -237,8 +231,9 @@ Before reporting an issue, verify:
 1. Look at the terminal where `npm run dev` is running
 2. See if there are any error messages
 3. Common errors:
-   - "MongoServerError" → MongoDB issue
-   - "TypeError" → Code issue (check migration)
+   - "PrismaClientInitializationError" → Database connection issue
+   - "Can't reach database server" → Check DATABASE_URL or Neon status
+   - "TypeError" → Code issue
    - "ECONNREFUSED" → Service not running
 
 ### Restart everything:
@@ -246,8 +241,8 @@ Before reporting an issue, verify:
 ```bash
 # Stop dev server (Ctrl+C in terminal)
 
-# Restart MongoDB
-brew services restart mongodb-community
+# Regenerate Prisma Client
+npx prisma generate
 
 # Clear Next.js cache
 rm -rf .next
@@ -270,22 +265,24 @@ http://localhost:3001/financial-playground
 ## 📞 Quick Commands
 
 ```bash
-# Check everything is running
-brew services list | grep mongodb
+# Check dev server is running
 ps aux | grep "next dev" | grep -v grep
 
 # Test session
 curl http://localhost:3001/api/test-session
 
-# Test MongoDB
-mongosh mongodb://localhost:27017/assetworks --eval "db.stats()"
+# Test database connection
+npx prisma studio
+
+# Generate Prisma Client
+npx prisma generate
 
 # View server logs
 tail -f ~/.npm/_logs/*.log
 
 # Restart everything
-brew services restart mongodb-community
 cd /Users/Victor/Projects/AssetWorks/assetworks-webapp
+npx prisma generate
 rm -rf .next
 npm run dev
 ```
@@ -296,10 +293,10 @@ npm run dev
 
 When everything works:
 - ✅ `/api/test-session` shows you're logged in
-- ✅ MongoDB `db.stats()` returns data
+- ✅ Prisma Studio opens successfully
 - ✅ No errors in browser console
 - ✅ "New Report" button creates thread successfully
-- ✅ All v1 features work (PDF, Share, etc.)
+- ✅ All features work (PDF, Share, Entity extraction, etc.)
 
 ---
 

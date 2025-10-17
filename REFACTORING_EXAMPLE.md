@@ -1,13 +1,13 @@
 # Component Refactoring Example
 
-## Breaking Down financial-playground-v2/page.tsx
+## Breaking Down financial-playground/page.tsx
 
 The current file is 2,187 lines. Here's how to split it into manageable components:
 
 ## 🎯 Target Structure
 
 ```
-app/financial-playground-v2/
+app/financial-playground/
 ├── page.tsx (150 lines - just the main layout)
 ├── components/
 │   ├── PlaygroundHeader.tsx
@@ -47,7 +47,7 @@ app/financial-playground-v2/
 
 ### Step 1: Extract Types (playground.types.ts)
 ```typescript
-// app/financial-playground-v2/types/playground.types.ts
+// app/financial-playground/types/playground.types.ts
 
 export interface Thread {
   _id: string;
@@ -104,7 +104,7 @@ export interface EditingContext {
 
 ### Step 2: Extract Custom Hooks (useThreads.ts)
 ```typescript
-// app/financial-playground-v2/hooks/useThreads.ts
+// app/financial-playground/hooks/useThreads.ts
 
 import useSWR from 'swr';
 import { Thread } from '../types/playground.types';
@@ -162,7 +162,7 @@ export function useThreads(userId?: string) {
 
 ### Step 3: Extract ThreadSidebar Component
 ```typescript
-// app/financial-playground-v2/components/ThreadSidebar/index.tsx
+// app/financial-playground/components/ThreadSidebar/index.tsx
 
 import { Thread } from '../../types/playground.types';
 import ThreadList from './ThreadList';
@@ -244,7 +244,7 @@ export default function ThreadSidebar({
 
 ### Step 4: Extract MessageArea Component
 ```typescript
-// app/financial-playground-v2/components/MessageArea/index.tsx
+// app/financial-playground/components/MessageArea/index.tsx
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import MessageList from './MessageList';
@@ -285,7 +285,7 @@ export default function MessageArea({
 
 ### Step 5: Main Page Component (Simplified)
 ```typescript
-// app/financial-playground-v2/page.tsx
+// app/financial-playground/page.tsx
 
 'use client';
 

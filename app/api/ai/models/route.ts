@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import { connectToDatabase } from '@/lib/db/mongodb';
-import ApiKey, { decryptApiKey } from '@/lib/db/models/ApiKey';
+import prisma from '@/lib/db/prisma';
+import { decryptApiKey } from '@/lib/utils/encryption';
 import { AI_MODELS, UnifiedAIClient, AIProvider } from '@/lib/ai/unified-client';
 
 // GET /api/ai/models - Get available AI models based on user's API keys
@@ -17,14 +17,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await connectToDatabase();
-
-    // Fetch all AI provider API keys for this user
-    const apiKeys = await ApiKey.find({
-      userId: session.user.id,
-      category: 'ai',
-      isActive: true,
-    }).select('+encryptedKey');
+    // Fetch all AI provider API keys for this user using Prisma
+    const apiKeys = await prisma.apiKey.findMany({
+      where: {
+        userId: session.user.id,
+        category: 'ai',
+        isActive: true,
+      },
+    });
 
     // Build provider map
     const providerKeys: Record<AIProvider, string | null> = {
@@ -100,14 +100,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectToDatabase();
-
-    // Fetch all AI provider API keys
-    const apiKeys = await ApiKey.find({
-      userId: session.user.id,
-      category: 'ai',
-      isActive: true,
-    }).select('+encryptedKey');
+    // Fetch all AI provider API keys using Prisma
+    const apiKeys = await prisma.apiKey.findMany({
+      where: {
+        userId: session.user.id,
+        category: 'ai',
+        isActive: true,
+      },
+    });
 
     const providerKeys: Record<AIProvider, string | null> = {
       openai: null,
@@ -135,20 +135,22 @@ export async function POST(request: NextRequest) {
       maxTokens: 500,
     });
 
-    // Update usage count for the provider
+    // Update usage count for the provider using Prisma
     const model = AI_MODELS[modelKey];
     if (model) {
-      await ApiKey.updateOne(
-        {
+      await prisma.apiKey.updateMany({
+        where: {
           userId: session.user.id,
           provider: model.provider,
           isActive: true,
         },
-        {
-          $set: { lastUsed: new Date() },
-          $inc: { usageCount: 1 },
-        }
-      );
+        data: {
+          lastUsed: new Date(),
+          usageCount: {
+            increment: 1,
+          },
+        },
+      });
     }
 
     return NextResponse.json({

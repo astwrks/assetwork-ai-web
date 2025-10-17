@@ -19,9 +19,9 @@ async function getEntityData(slug: string) {
   const entity = await prisma.entities.findUnique({
     where: { slug },
     include: {
-      mentions: {
+      entity_mentions: {
         include: {
-          report: {
+          reports: {
             select: {
               id: true,
               title: true,
@@ -34,10 +34,10 @@ async function getEntityData(slug: string) {
         orderBy: { createdAt: 'desc' },
         take: 100,
       },
-      insights: {
+      entity_insights: {
         orderBy: { createdAt: 'desc' },
       },
-      tags: {
+      entity_tags: {
         orderBy: { tag: 'asc' },
       },
     },
@@ -48,7 +48,7 @@ async function getEntityData(slug: string) {
   }
 
   // Calculate statistics
-  const sentiments = entity.mentions
+  const sentiments = entity.entity_mentions
     .filter((m) => m.sentiment !== null)
     .map((m) => m.sentiment as number);
 
@@ -65,14 +65,14 @@ async function getEntityData(slug: string) {
 
   // Group mentions by month for chart
   const mentionsByMonth: Record<string, number> = {};
-  entity.mentions.forEach((m) => {
+  entity.entity_mentions.forEach((m) => {
     const monthKey = new Date(m.createdAt).toISOString().substring(0, 7);
     mentionsByMonth[monthKey] = (mentionsByMonth[monthKey] || 0) + 1;
   });
 
   // Get unique reports
   const uniqueReports = Array.from(
-    new Map(entity.mentions.map((m) => [m.report.id, m.report])).values()
+    new Map(entity.entity_mentions.map((m) => [m.reports.id, m.reports])).values()
   );
 
   return {
@@ -81,7 +81,7 @@ async function getEntityData(slug: string) {
       avgSentiment,
       sentimentDistribution,
       mentionsByMonth,
-      totalMentions: entity.mentions.length,
+      totalMentions: entity.entity_mentions.length,
       uniqueReports: uniqueReports.length,
     },
     reports: uniqueReports,
@@ -123,8 +123,8 @@ export default async function EntityPage({ params }: EntityPageProps) {
             <EntityStats entity={entity} statistics={statistics} />
 
             {/* AI Insights */}
-            {entity.insights && entity.insights.length > 0 && (
-              <EntityInsights insights={entity.insights} />
+            {entity.entity_insights && entity.entity_insights.length > 0 && (
+              <EntityInsights insights={entity.entity_insights} />
             )}
 
             {/* Master Markdown */}
@@ -138,7 +138,7 @@ export default async function EntityPage({ params }: EntityPageProps) {
             {/* Related Reports Grid */}
             <EntityReports
               reports={reports}
-              mentions={entity.mentions}
+              mentions={entity.entity_mentions}
               entityName={entity.name}
             />
           </div>
@@ -202,11 +202,11 @@ export default async function EntityPage({ params }: EntityPageProps) {
             </div>
 
             {/* Tags */}
-            {entity.tags && entity.tags.length > 0 && (
+            {entity.entity_tags && entity.entity_tags.length > 0 && (
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
                 <h3 className="text-lg font-semibold mb-4">Tags</h3>
                 <div className="flex flex-wrap gap-2">
-                  {entity.tags.map((tagItem) => (
+                  {entity.entity_tags.map((tagItem) => (
                     <span
                       key={tagItem.id}
                       className="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm font-medium"

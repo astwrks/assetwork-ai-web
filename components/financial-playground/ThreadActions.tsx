@@ -15,6 +15,8 @@ import {
   Archive,
   Download,
   ExternalLink,
+  Minimize2,
+  Loader2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -48,6 +50,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { ProgressiveLoader } from '@/components/ui/progressive-loader';
 
 interface Thread {
   id: string;
@@ -86,10 +89,21 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showContextDialog, setShowContextDialog] = useState(false);
+  const [showCompressDialog, setShowCompressDialog] = useState(false);
   const [newTitle, setNewTitle] = useState(thread.title);
   const [newDescription, setNewDescription] = useState(thread.description || '');
   const [contextData, setContextData] = useState<any>(null);
   const [loadingContext, setLoadingContext] = useState(false);
+  const [contextLoadingStage, setContextLoadingStage] = useState(0);
+  const [compressing, setCompressing] = useState(false);
+  const [compressionStats, setCompressionStats] = useState<any>(null);
+
+  // Progressive loader stages for context loading
+  const contextLoadingStages = [
+    { name: 'Fetching messages', estimatedDuration: 500, weight: 1 },
+    { name: 'Loading reports', estimatedDuration: 300, weight: 1 },
+    { name: 'Processing content', estimatedDuration: 200, weight: 1 },
+  ];
 
   // Toggle bookmark
   const handleToggleBookmark = async () => {
@@ -191,20 +205,27 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
   // Load thread context
   const loadThreadContext = async () => {
     setLoadingContext(true);
+    setContextLoadingStage(0);
+    setShowContextDialog(true); // Show dialog immediately with loader
+    setContextData(null); // Clear previous data
+
     try {
+      setContextLoadingStage(1); // Stage 1: Loading reports
       const response = await fetch(`/api/v2/threads/${thread.id}/context`, {
         credentials: 'include',
       });
 
       if (response.ok) {
+        setContextLoadingStage(2); // Stage 2: Processing content
         const data = await response.json();
         setContextData(data.data);
-        setShowContextDialog(true);
       } else {
         toast.error('Failed to load thread context');
+        setShowContextDialog(false);
       }
     } catch (error) {
       toast.error('Failed to load thread context');
+      setShowContextDialog(false);
     } finally {
       setLoadingContext(false);
     }
@@ -214,6 +235,56 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
   const handleCopyId = () => {
     navigator.clipboard.writeText(thread.id);
     toast.success('Thread ID copied');
+  };
+
+  // Load compression stats
+  const loadCompressionStats = async () => {
+    try {
+      const response = await fetch(`/api/v2/threads/${thread.id}/compress`, {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCompressionStats(data.data);
+        setShowCompressDialog(true);
+      } else {
+        toast.error('Failed to load compression stats');
+      }
+    } catch (error) {
+      toast.error('Failed to load compression stats');
+    }
+  };
+
+  // Compress thread
+  const handleCompress = async () => {
+    setCompressing(true);
+    try {
+      const response = await fetch(`/api/v2/threads/${thread.id}/compress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          keepRecentCount: 10,
+          force: false,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast.success(data.message || 'Thread compressed successfully');
+        setShowCompressDialog(false);
+        // Reload stats to show updated information
+        await loadCompressionStats();
+      } else {
+        toast.error(data.message || 'Failed to compress thread');
+      }
+    } catch (error) {
+      toast.error('Failed to compress thread');
+    } finally {
+      setCompressing(false);
+    }
   };
 
   // Export thread
@@ -280,6 +351,12 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
             <DropdownMenuItem onClick={loadThreadContext} disabled={loadingContext}>
               <Eye className="w-4 h-4 mr-2" />
               Show Context
+            </DropdownMenuItem>
+
+            {/* Compress Thread with AI */}
+            <DropdownMenuItem onClick={loadCompressionStats}>
+              <Minimize2 className="w-4 h-4 mr-2" />
+              Compress with AI
             </DropdownMenuItem>
 
             {/* Archive */}
@@ -389,7 +466,19 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
               </DialogDescription>
             </DialogHeader>
             <ScrollArea className="h-[400px] rounded-md border p-4">
-              {contextData ? (
+              {loadingContext ? (
+                <div className="flex items-center justify-center h-full">
+                  <ProgressiveLoader
+                    isLoading={loadingContext}
+                    stages={contextLoadingStages}
+                    currentStage={contextLoadingStage}
+                    variant="detailed"
+                    showElapsedTime={true}
+                    showEstimatedTime={true}
+                    className="w-full"
+                  />
+                </div>
+              ) : contextData ? (
                 <pre className="text-xs">
                   {JSON.stringify(contextData, null, 2)}
                 </pre>
@@ -406,12 +495,106 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
                   navigator.clipboard.writeText(JSON.stringify(contextData, null, 2));
                   toast.success('Context copied to clipboard');
                 }}
+                disabled={!contextData}
               >
                 <Copy className="w-4 h-4 mr-2" />
                 Copy Context
               </Button>
               <Button onClick={() => setShowContextDialog(false)}>
                 Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Compress Dialog */}
+        <Dialog open={showCompressDialog} onOpenChange={setShowCompressDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Compress Thread with AI</DialogTitle>
+              <DialogDescription>
+                Use AI to compress older messages and reduce token usage while preserving context
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {compressionStats ? (
+                <>
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Messages</p>
+                      <p className="text-2xl font-bold">{compressionStats.stats?.messageCount || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Tokens</p>
+                      <p className="text-2xl font-bold">{compressionStats.stats?.totalTokens?.toLocaleString() || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Compressible Messages</p>
+                      <p className="text-2xl font-bold text-orange-600">
+                        {compressionStats.stats?.compressibleMessages || 0}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Potential Savings</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {compressionStats.stats?.estimatedSavings?.toLocaleString() || 0} tokens
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Recommendation */}
+                  {compressionStats.recommendation && (
+                    <div className={cn(
+                      "p-4 rounded-lg border",
+                      compressionStats.recommendation.shouldCompress
+                        ? "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800"
+                        : "bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800"
+                    )}>
+                      <p className="font-medium mb-2">
+                        {compressionStats.recommendation.shouldCompress ? '✅ Compression Recommended' : 'ℹ️ Compression Not Recommended'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {compressionStats.recommendation.reason}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Last Compression Info */}
+                  {compressionStats.metadata?.lastCompression && (
+                    <p className="text-sm text-muted-foreground">
+                      Last compressed: {new Date(compressionStats.metadata.lastCompression).toLocaleString()}
+                      {compressionStats.metadata.totalCompressions && (
+                        <span> • {compressionStats.metadata.totalCompressions} total compressions</span>
+                      )}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowCompressDialog(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCompress}
+                disabled={compressing || !compressionStats?.recommendation?.shouldCompress}
+              >
+                {compressing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Compressing...
+                  </>
+                ) : (
+                  <>
+                    <Minimize2 className="w-4 h-4 mr-2" />
+                    Compress Thread
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

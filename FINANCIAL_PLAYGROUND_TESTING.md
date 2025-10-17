@@ -9,7 +9,7 @@
 ## How to Test
 
 ### 1. Access the Application
-Open your browser to: http://localhost:3001/financial-playground-v2
+Open your browser to: http://localhost:3001/financial-playground
 
 ### 2. Test Report Generation with Progress Display
 
@@ -94,7 +94,7 @@ If the report doesn't display:
 1. **`/components/ui/progress.tsx`** - Radix UI Progress component
 2. **`/components/financial-playground/StreamingProgress.tsx`** - Real-time progress indicator
 3. **`/components/financial-playground/ReportDisplay.tsx`** - Report rendering component
-4. **`/app/financial-playground-v2/page.tsx`** - Main page with streaming handler
+4. **`/app/financial-playground/page.tsx`** - Main page with streaming handler
 
 ### Key Features Implemented:
 - Server-Sent Events (SSE) streaming handler

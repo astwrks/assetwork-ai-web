@@ -50,7 +50,7 @@ The component now logs the entire data flow:
 ## How to Test
 
 ### 1. Access the Application
-Open: http://localhost:3001/financial-playground-v2
+Open: http://localhost:3001/financial-playground
 
 ### 2. Open Browser Developer Tools
 - Press F12 or right-click → Inspect
@@ -211,12 +211,12 @@ In DevTools → Network tab, filter for:
 
 1. `/components/financial-playground/ReportDisplay.tsx` - Main component changes
 2. `/app/api/playground/reports/[reportId]/route.ts` - New API endpoint
-3. `/app/financial-playground-v2/page.tsx` - Added messages prop to ReportDisplay
+3. `/app/financial-playground/page.tsx` - Added messages prop to ReportDisplay
 
 ## Testing Checklist
 
 - [ ] Server running on http://localhost:3001
-- [ ] Can access /financial-playground-v2 page
+- [ ] Can access /financial-playground page
 - [ ] Can create/select threads
 - [ ] Browser console shows debug logs
 - [ ] Sending message triggers report generation
@@ -237,7 +237,7 @@ In DevTools → Network tab, filter for:
 
 ## Next Steps for User
 
-1. Open http://localhost:3001/financial-playground-v2
+1. Open http://localhost:3001/financial-playground
 2. Open browser DevTools Console (F12)
 3. Generate a report by sending a message
 4. Watch the console for the debug logs

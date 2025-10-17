@@ -129,7 +129,7 @@ export default function SignInPage() {
 **Solution**: Created layout files forcing dynamic rendering:
 
 **Files Created**:
-- `app/financial-playground-v2/layout.tsx`
+- `app/financial-playground/layout.tsx`
 - `app/financial-playground/layout.tsx`
 - `app/settings/layout.tsx`
 

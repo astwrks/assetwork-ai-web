@@ -1,7 +1,9 @@
 # Financial Playground V2 Migration Complete 🎉
 
-**Date:** October 14, 2025  
+**Date:** October 14, 2025
 **Status:** ✅ All v1 functionality migrated to v2 with superior UI/UX
+
+> **📌 Note (Updated October 17, 2025):** The V2 implementation is now the primary route at `/financial-playground`. The `/financial-playground-v2` directory has been removed. This document describes the historical migration process.
 
 ---
 
@@ -64,7 +66,7 @@ Successfully ported **ALL** functionality from `/financial-playground` (v1) to `
 ### 6. **Settings Navigation** ✅
 - **Location**: Thread header (right side)
 - **Features**:
-  - Direct link to `/financial-playground-v2/settings`
+  - Direct link to `/financial-playground/settings`
   - Settings gear icon
   - Tooltip: "Playground settings"
 
@@ -259,7 +261,7 @@ V2 retains its superior UX features:
 ## 📦 Files Modified
 
 ### Primary File:
-- `/app/financial-playground-v2/page.tsx` (2,012 lines)
+- `/app/financial-playground/page.tsx` (2,012 lines)
 
 ### Components Imported:
 - `ShareDialog` from `/components/financial-playground/`

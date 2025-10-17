@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
-import ApiKey from '@/lib/db/models/ApiKey';
+import { prisma } from '@/lib/db/prisma';
 import { ApiKeyConnectionTestService } from '@/lib/services/api-key-connection-test.service';
 
 // GET /api/settings/financial-data - Get financial data API keys and status
@@ -17,8 +17,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all financial data API keys for this user
-    const keys = await ApiKey.find({
-      userId: session.user.id,
+    const keys = await prisma.api_keys.findMany({
+      where: {
+        userId: session.user.id,
+      },
     });
 
     // Filter for financial data keys
@@ -30,13 +32,13 @@ export async function GET(request: NextRequest) {
     // Transform keys for frontend
     const transformedKeys = financialKeys.map(key => ({
       id: key.id,
-      name: key.name,
+      name: key.keyName,
       provider: key.provider,
       category: getKeyCategory(key.provider),
       keyPreview: key.encryptedKey ? `****${key.encryptedKey.slice(-4)}` : '****',
       connectionStatus: 'unknown', // Will be updated by connection check
       lastChecked: null,
-      lastUsed: key.lastUsed,
+      lastUsed: key.lastUsedAt,
       usageCount: key.usageCount,
       createdAt: key.createdAt,
     }));
@@ -79,19 +81,21 @@ export async function POST(request: NextRequest) {
     const { keyId, checkAll } = body;
 
     // Get keys to check
-    const keys = await ApiKey.find({
-      userId: session.user.id,
+    const keys = await prisma.api_keys.findMany({
+      where: {
+        userId: session.user.id,
+      },
     });
 
-    // Filter for financial data keys
-    const financialKeys = keys.filter(key => {
+    // Filter keys to check (support both financial data and AI keys)
+    const allKeys = keys.filter(key => {
       const category = getKeyCategory(key.provider);
-      return ['financial_data', 'crypto', 'other'].includes(category);
+      return ['financial_data', 'crypto', 'other', 'ai'].includes(category);
     });
 
-    let keysToCheck = financialKeys;
+    let keysToCheck = allKeys;
     if (keyId) {
-      keysToCheck = financialKeys.filter(key => key.id === keyId);
+      keysToCheck = allKeys.filter(key => key.id === keyId);
     }
 
     // Check connections with real API tests
@@ -106,20 +110,20 @@ export async function POST(request: NextRequest) {
 
           // Update last checked time if successful
           if (testResult.success) {
-            await ApiKey.updateOne(
-              {
+            await prisma.api_keys.updateMany({
+              where: {
                 userId: session.user.id,
                 provider: key.provider,
               },
-              {
-                $set: { lastUsed: new Date() },
-              }
-            );
+              data: {
+                lastUsedAt: new Date(),
+              },
+            });
           }
 
           return {
             id: key.id,
-            name: key.name,
+            name: key.keyName,
             provider: key.provider,
             status: testResult.status,
             message: testResult.message,
@@ -131,7 +135,7 @@ export async function POST(request: NextRequest) {
         } catch (error: any) {
           return {
             id: key.id,
-            name: key.name,
+            name: key.keyName,
             provider: key.provider,
             status: 'error' as const,
             message: 'Connection test failed',

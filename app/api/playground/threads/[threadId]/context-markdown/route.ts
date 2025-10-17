@@ -3,6 +3,26 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth/auth-options';
 import { prisma } from '@/lib/db/prisma';
 
+// Efficient HTML to text converter
+function stripHtmlTags(html: string): string {
+  // Remove script and style tags with their content
+  let text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  // Remove all other HTML tags
+  text = text.replace(/<[^>]+>/g, ' ');
+  // Decode HTML entities
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'");
+  // Clean up whitespace
+  text = text.replace(/\s+/g, ' ').trim();
+  return text;
+}
+
 // GET /api/playground/threads/:threadId/context-markdown
 export async function GET(
   request: NextRequest,
@@ -67,19 +87,33 @@ export async function GET(
       hasSharedAccess,
     });
 
-    // Fetch messages
-    const messages = await prisma.messages.findMany({
-      where: { threadId },
-      orderBy: { createdAt: 'asc' },
-      take: 500,
-    });
-
-    // Fetch reports
-    const reports = await prisma.playground_reports.findMany({
-      where: { threadId },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    // Fetch messages and reports in parallel for better performance
+    const [messages, reports] = await Promise.all([
+      prisma.messages.findMany({
+        where: { threadId },
+        orderBy: { createdAt: 'asc' },
+        take: 100, // Reduced from 500 for better performance
+        select: {
+          id: true,
+          role: true,
+          content: true,
+          metadata: true,
+          createdAt: true,
+        },
+      }),
+      prisma.playground_reports.findMany({
+        where: { threadId },
+        orderBy: { createdAt: 'desc' },
+        take: 5, // Reduced from 50 - only show recent reports
+        select: {
+          id: true,
+          title: true,
+          htmlContent: true,
+          isInteractiveMode: true,
+          createdAt: true,
+        },
+      }),
+    ]);
 
     // Generate markdown content
     let markdown = `# Thread: ${thread.title}\n\n`;
@@ -121,31 +155,44 @@ export async function GET(
         markdown += `**Mode**: ${report.isInteractiveMode ? 'Interactive' : 'Static'}\n\n`;
 
         if (report.htmlContent) {
-          // Strip HTML tags for markdown
-          const textContent = report.htmlContent.replace(/<[^>]*>/g, '');
-          markdown += `${textContent}\n\n`;
+          // Strip HTML tags for markdown using efficient function
+          const textContent = stripHtmlTags(report.htmlContent);
+          // Limit report content length to avoid huge payloads
+          const maxLength = 5000;
+          markdown += textContent.length > maxLength
+            ? `${textContent.substring(0, maxLength)}...\n\n*[Content truncated for performance]*\n\n`
+            : `${textContent}\n\n`;
         }
 
         markdown += `---\n\n`;
       });
     }
 
+    // Calculate total tokens more efficiently
+    const totalTokens = messages.reduce((sum, m) => {
+      const msgMetadata = m.metadata as any;
+      return sum + (typeof msgMetadata?.tokens === 'number' ? msgMetadata.tokens : 0);
+    }, 0);
+
+    // Return with caching headers for better performance
     return NextResponse.json(
       {
         markdown,
         stats: {
           messageCount: messages.length,
           reportCount: reports.length,
-          totalTokens: messages.reduce((sum, m) => {
-            const msgMetadata = m.metadata as any;
-            return (
-              sum +
-              (typeof msgMetadata?.tokens === 'number' ? msgMetadata.tokens : 0)
-            );
-          }, 0),
+          totalTokens,
         },
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          // Cache for 5 minutes - thread context doesn't change frequently
+          'Cache-Control': 'private, max-age=300, stale-while-revalidate=60',
+          // Add ETag for conditional requests
+          'ETag': `W/"${threadId}-${thread.updatedAt.getTime()}"`,
+        },
+      }
     );
   } catch (error) {
     console.error('❌ Error fetching thread context markdown:', {

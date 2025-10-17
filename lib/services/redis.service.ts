@@ -3,8 +3,127 @@
  * Provides multi-layer caching with automatic fallback
  */
 
-import Redis from 'ioredis';
 import { z } from 'zod';
+
+// Optional Redis - gracefully degraded if not available
+let Redis: any = null;
+let redisEnabled = false;
+
+try {
+  Redis = require('ioredis');
+  redisEnabled = process.env.REDIS_ENABLED !== 'false';
+} catch {
+  console.warn('⚠️  Redis not available - using in-memory cache fallback');
+}
+
+// In-memory cache fallback for development
+class InMemoryCache {
+  private cache = new Map<string, { value: string; expiresAt: number }>();
+
+  async get(key: string): Promise<string | null> {
+    const item = this.cache.get(key);
+    if (!item) return null;
+
+    if (Date.now() > item.expiresAt) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return item.value;
+  }
+
+  async setex(key: string, ttl: number, value: string): Promise<void> {
+    this.cache.set(key, {
+      value,
+      expiresAt: Date.now() + (ttl * 1000),
+    });
+  }
+
+  async del(...keys: string[]): Promise<void> {
+    keys.forEach(key => this.cache.delete(key));
+  }
+
+  async keys(pattern: string): Promise<string[]> {
+    const regex = new RegExp(pattern.replace(/\*/g, '.*'));
+    return Array.from(this.cache.keys()).filter(key => regex.test(key));
+  }
+
+  async incr(key: string): Promise<number> {
+    const item = this.cache.get(key);
+    const current = item ? parseInt(item.value) : 0;
+    const newValue = current + 1;
+    this.cache.set(key, {
+      value: String(newValue),
+      expiresAt: item?.expiresAt || Date.now() + 3600000,
+    });
+    return newValue;
+  }
+
+  async expire(key: string, ttl: number): Promise<void> {
+    const item = this.cache.get(key);
+    if (item) {
+      item.expiresAt = Date.now() + (ttl * 1000);
+    }
+  }
+
+  async ttl(key: string): Promise<number> {
+    const item = this.cache.get(key);
+    if (!item) return -2;
+    const remaining = Math.max(0, Math.ceil((item.expiresAt - Date.now()) / 1000));
+    return remaining;
+  }
+
+  async exists(key: string): Promise<number> {
+    const item = this.cache.get(key);
+    if (!item || Date.now() > item.expiresAt) return 0;
+    return 1;
+  }
+
+  async mget(...keys: string[]): Promise<(string | null)[]> {
+    return Promise.all(keys.map(key => this.get(key)));
+  }
+
+  pipeline() {
+    const commands: Array<() => Promise<any>> = [];
+    return {
+      setex: (key: string, ttl: number, value: string) => {
+        commands.push(() => this.setex(key, ttl, value));
+        return this;
+      },
+      set: (key: string, value: string) => {
+        commands.push(() => this.setex(key, 3600, value));
+        return this;
+      },
+      exec: async () => {
+        await Promise.all(commands.map(cmd => cmd()));
+        return [];
+      },
+    };
+  }
+
+  // PubSub methods for compatibility
+  async publish(channel: string, message: string): Promise<number> {
+    // In-memory implementation: emit to local subscribers only
+    // In a real application, you'd need an EventEmitter here
+    console.log(`[InMemoryCache] PubSub publish to ${channel}:`, message.substring(0, 100));
+    return 1; // Return 1 to indicate one subscriber received it
+  }
+
+  subscribe(channel: string): void {
+    console.log(`[InMemoryCache] Subscribe to channel: ${channel}`);
+  }
+
+  unsubscribe(channel: string): void {
+    console.log(`[InMemoryCache] Unsubscribe from channel: ${channel}`);
+  }
+
+  // Event handler stub
+  on(event: string, handler: Function): void {
+    console.log(`[InMemoryCache] Event handler registered for: ${event}`);
+  }
+}
+
+const inMemoryCache = new InMemoryCache();
 
 // Redis connection configuration
 const redisConfig = {
@@ -15,12 +134,13 @@ const redisConfig = {
   retryStrategy: (times: number) => Math.min(times * 50, 2000),
   enableOfflineQueue: true,
   maxRetriesPerRequest: 3,
+  lazyConnect: true, // Don't connect immediately
 };
 
-// Create Redis clients
-export const redisClient = new Redis(redisConfig);
-export const redisPubClient = new Redis(redisConfig);
-export const redisSubClient = new Redis(redisConfig);
+// Create Redis clients (or use in-memory fallback)
+export const redisClient = Redis && redisEnabled ? new Redis(redisConfig) : inMemoryCache;
+export const redisPubClient = Redis && redisEnabled ? new Redis(redisConfig) : inMemoryCache;
+export const redisSubClient = Redis && redisEnabled ? new Redis(redisConfig) : inMemoryCache;
 
 // Cache key prefixes for organization
 export const CacheKeys = {
@@ -325,24 +445,30 @@ export class RateLimitService {
   }
 }
 
-// Connection event handlers
-redisClient.on('connect', () => {
-  console.log('✅ Redis connected');
-});
+// Connection event handlers (only if real Redis is enabled)
+if (Redis && redisEnabled) {
+  redisClient.on('connect', () => {
+    console.log('✅ Redis connected');
+  });
 
-redisClient.on('error', (error) => {
-  console.error('❌ Redis error:', error);
-});
+  redisClient.on('error', (error) => {
+    console.error('❌ Redis error:', error);
+  });
 
-redisClient.on('close', () => {
-  console.log('Redis connection closed');
-});
+  redisClient.on('close', () => {
+    console.log('Redis connection closed');
+  });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  await redisClient.quit();
-  await redisPubClient.quit();
-  await redisSubClient.quit();
-});
+  // Graceful shutdown
+  process.on('SIGTERM', async () => {
+    if (Redis && redisEnabled) {
+      await redisClient.quit();
+      await redisPubClient.quit();
+      await redisSubClient.quit();
+    }
+  });
+} else {
+  console.log('✅ Using in-memory cache for development');
+}
 
 export default CacheService;

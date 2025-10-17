@@ -73,9 +73,11 @@ export async function GET(request: NextRequest) {
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
+
+    const userId = session.user.id;
 
     // Get query parameters
     const searchParams = request.nextUrl.searchParams;
@@ -83,7 +85,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     // Check cache
-    const cacheKey = `dashboard:activities:${session.user.email}:${limit}:${offset}`;
+    const cacheKey = `dashboard:activities:${userId}:${limit}:${offset}`;
     const cached = await CacheService.get(cacheKey);
     if (cached) {
       PerformanceMonitor.end(operationId, { cached: true });
@@ -94,19 +96,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
-
     // Fetch activities
     const activities = await prisma.user_activities.findMany({
-      where: { userId: user.id },
+      where: { userId: userId },
       take: limit,
       skip: offset,
       orderBy: { createdAt: 'desc' },
@@ -173,11 +165,11 @@ export async function GET(request: NextRequest) {
     // Get activity summary
     const [totalActivities, todayActivities] = await Promise.all([
       prisma.user_activities.count({
-        where: { userId: user.id },
+        where: { userId: userId },
       }),
       prisma.user_activities.count({
         where: {
-          userId: user.id,
+          userId: userId,
           createdAt: {
             gte: new Date(new Date().setHours(0, 0, 0, 0)),
           },
@@ -198,13 +190,12 @@ export async function GET(request: NextRequest) {
     await CacheService.set(cacheKey, result, CacheTTL.SHORT);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       count: activities.length,
     });
 
     LoggingService.info('Dashboard activities fetched', {
-      userId: user.id,
-      email: session.user.email,
+      userId: userId,
       count: activities.length,
       duration,
     });

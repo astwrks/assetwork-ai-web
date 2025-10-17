@@ -53,7 +53,7 @@ Update them and trigger a new deploy:
 
 ```
 REQUIRED:
-✅ DATABASE_URL              - MongoDB connection string
+✅ DATABASE_URL              - PostgreSQL connection string
 ✅ ENCRYPTION_KEY            - For API key encryption (32+ chars)
 ✅ NEXTAUTH_SECRET           - For authentication (32+ chars)
 ✅ NEXTAUTH_URL              - Your production URL (e.g., https://yoursite.netlify.app)
@@ -117,7 +117,7 @@ Visit your site URL (shown in Netlify dashboard) and test:
 - [ ] Sections can be edited
 
 #### Financial Playground V2
-- [ ] `/financial-playground-v2` - Opens successfully
+- [ ] `/financial-playground` - Opens successfully
 - [ ] Enhanced editing works
 - [ ] Cancel edit button appears
 - [ ] All features functional
@@ -161,7 +161,7 @@ Visit your site URL (shown in Netlify dashboard) and test:
 ### Issue: "Database connection failed"
 **Solution**:
 1. Verify `DATABASE_URL` is set in environment variables
-2. Check that MongoDB is accessible from external IPs
+2. Check that PostgreSQL is accessible from external IPs
 3. Ensure connection string is correct (includes credentials)
 
 ---
@@ -187,7 +187,7 @@ Visit your site URL (shown in Netlify dashboard) and test:
 ## 7. Post-Deployment Verification
 
 ### Database Check
-1. Open MongoDB Compass or Atlas
+1. Open PostgreSQL Compass or Atlas
 2. Verify collections exist:
    - `apikeys` - Should have connection status fields
    - `playgroundsettings` - For user preferences
@@ -197,7 +197,7 @@ Visit your site URL (shown in Netlify dashboard) and test:
 
 ### API Key Encryption
 1. Add a test API key in `/settings`
-2. Check MongoDB - key should be encrypted (not plaintext)
+2. Check PostgreSQL - key should be encrypted (not plaintext)
 3. Verify preview shows last 4 characters only
 4. Test connection to ensure decryption works
 

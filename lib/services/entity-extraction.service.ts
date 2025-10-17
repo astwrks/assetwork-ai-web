@@ -1,6 +1,7 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 import { prisma } from '@/lib/db/prisma';
 import crypto from 'crypto';
+import { z } from 'zod';
 
 interface ExtractedEntity {
   name: string;
@@ -11,6 +12,29 @@ interface ExtractedEntity {
   relevance: number; // 0 to 1
   metadata?: Record<string, any>;
 }
+
+// Zod schema for runtime validation of AI-extracted entities
+const ExtractedEntitySchema = z.object({
+  name: z.string().min(1, 'Entity name is required'),
+  type: z.enum([
+    'COMPANY',
+    'STOCK',
+    'PERSON',
+    'PRODUCT',
+    'SECTOR',
+    'CRYPTOCURRENCY',
+    'COMMODITY',
+    'INDEX',
+    'ETF',
+  ]),
+  ticker: z.string().optional(),
+  context: z.string().min(1, 'Context is required'),
+  sentiment: z.number().min(-1).max(1),
+  relevance: z.number().min(0).max(1),
+  metadata: z.record(z.any()).optional(),
+});
+
+const ExtractedEntitiesArraySchema = z.array(ExtractedEntitySchema);
 
 /**
  * Service for extracting named entities from financial reports using AI
@@ -75,16 +99,28 @@ Return ONLY the JSON array, no other text.`;
       const responseText =
         message.content[0].type === 'text' ? message.content[0].text : '';
 
-      // Parse JSON response
+      // Parse and validate JSON response
       const jsonMatch = responseText.match(/\[[\s\S]*\]/);
       if (!jsonMatch) {
         console.error('No JSON array found in AI response');
         return [];
       }
 
-      const entities: ExtractedEntity[] = JSON.parse(jsonMatch[0]);
-      console.log(`Extracted ${entities.length} entities from report`);
-      return entities;
+      // Parse JSON and validate with Zod schema
+      try {
+        const parsedData = JSON.parse(jsonMatch[0]);
+        const entities = ExtractedEntitiesArraySchema.parse(parsedData);
+        console.log(`✅ Extracted and validated ${entities.length} entities from report`);
+        return entities;
+      } catch (validationError) {
+        if (validationError instanceof z.ZodError) {
+          console.error('❌ Entity validation failed:', validationError.errors);
+          console.error('Invalid entity data received from AI - skipping extraction');
+        } else {
+          console.error('❌ JSON parsing failed:', validationError);
+        }
+        return [];
+      }
     } catch (error) {
       console.error('Entity extraction failed:', error);
       return [];

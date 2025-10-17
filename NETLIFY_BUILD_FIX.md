@@ -114,7 +114,7 @@ npm run build
 app/                  # ✅ We use this
   settings/
     page.tsx          # ✅ Exists
-  financial-playground-v2/
+  financial-playground/
     page.tsx          # ✅ Exists
   api/
   ...
@@ -249,7 +249,7 @@ Netlify logs should show:
 app/             # ✅ Should see this
   settings/
   api/
-  financial-playground-v2/
+  financial-playground/
 ```
 
 NOT:

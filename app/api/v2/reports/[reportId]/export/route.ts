@@ -32,19 +32,12 @@ export async function POST(
   try {
     // Authentication
     const session = await getServerSession();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, name: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
+    const userName = session.user.name;
 
     const reportId = params.reportId;
 
@@ -57,7 +50,7 @@ export async function POST(
       where: {
         id: reportId,
         threads: {
-          userId: user.id,
+          userId: userId,
         },
       },
       include: {
@@ -96,15 +89,15 @@ export async function POST(
 
     switch (validated.format) {
       case 'pdf':
-        exportBuffer = await exportToPDF(report, user);
+        exportBuffer = await exportToPDF(report, { id: userId, name: userName });
         break;
 
       case 'markdown':
-        exportBuffer = await exportToMarkdown(report, user);
+        exportBuffer = await exportToMarkdown(report, { id: userId, name: userName });
         break;
 
       case 'html':
-        exportBuffer = await exportToHTML(report, user);
+        exportBuffer = await exportToHTML(report, { id: userId, name: userName });
         break;
 
       case 'docx':
@@ -119,14 +112,14 @@ export async function POST(
     await CacheService.set(cacheKey, exportBuffer.toString('base64'), 3600);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       reportId,
       format: validated.format,
       size: exportBuffer.length,
     });
 
     LoggingService.info('Report exported', {
-      userId: user.id,
+      userId: userId,
       reportId,
       format: validated.format,
       size: exportBuffer.length,

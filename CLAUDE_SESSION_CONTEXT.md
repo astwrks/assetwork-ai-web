@@ -73,7 +73,7 @@ DIRECT_URL=postgresql://neondb_owner:npg_ovqdftT4bR5y@ep-young-thunder-ad70ggph.
 - `entity_mentions` - Track every mention across reports
 - `entity_insights` - AI-generated insights (summary, trend, prediction)
 - `entity_tags` - Flexible tagging system
-- `reports` - Synced from MongoDB for entity extraction
+- `reports` - Financial reports stored in PostgreSQL
 
 **Key Relations**:
 ```prisma
@@ -107,10 +107,10 @@ entity_mentions {
 - Non-blocking background processing
 - Called automatically after report generation
 
-**`lib/utils/report-sync.ts`**
-- Syncs MongoDB reports to Prisma
+**`lib/utils/entity-processor.ts`**
+- Processes reports for entity extraction
 - Triggers entity extraction in background
-- Location: Called from `/app/api/playground/threads/[threadId]/messages/route.ts:538-550`
+- Called automatically after report generation
 
 ---
 
@@ -119,9 +119,9 @@ entity_mentions {
 ### Automatic Entity Extraction Flow
 
 1. **User generates report** → POST `/api/playground/threads/[threadId]/messages`
-2. **Report saved to MongoDB** → Returns report ID
-3. **Sync triggered** → `syncReportToPrisma()` called (line 538)
-4. **Report copied to Prisma** → Upsert to `reports` table
+2. **Report saved to PostgreSQL** → Stored in `reports` table via Prisma
+3. **Entity extraction triggered** → Background processing starts
+4. **Report data ready** → Available for entity analysis
 5. **Entity extraction starts** (background) → `processReportEntities()`
 6. **Claude analyzes HTML** → Extracts 3-10 key entities
 7. **Entities saved** → Creates/updates `entities` and `entity_mentions`
@@ -154,7 +154,7 @@ lib/services/
 
 lib/utils/
   ├── entity-processor.ts             [Orchestration layer]
-  └── report-sync.ts                  [MongoDB → Prisma sync]
+  └── entity-helpers.ts               [Entity processing utilities]
 ```
 
 ### API Routes
@@ -202,7 +202,7 @@ lib/db/prisma.ts                    [Prisma client config]
 
 2. **Navigate to Financial Playground**
    ```
-   http://localhost:3001/financial-playground-v2
+   http://localhost:3001/financial-playground
    ```
 
 3. **Generate a new report** with entity-rich content:
@@ -212,7 +212,7 @@ lib/db/prisma.ts                    [Prisma client config]
 
 4. **Expected Results**:
    - ✅ Report generates successfully
-   - ✅ Console logs show: "Syncing MongoDB report..."
+   - ✅ Console logs show: "Processing entities for report..."
    - ✅ Console logs show: "Extracted X entities from report"
    - ✅ EntityChips appear below the report
    - ✅ Clicking chips navigates to entity detail pages
@@ -221,8 +221,6 @@ lib/db/prisma.ts                    [Prisma client config]
 
 **Expected logs** (check terminal running `npm run dev`):
 ```
-Syncing MongoDB report 68ee... to Prisma...
-✅ Report synced to Prisma: 68ee...
 Processing entities for report 68ee...
 Extracted 5 entities from report
 Created new entity: Trent
@@ -242,7 +240,7 @@ npx prisma studio
 **Tables to check**:
 - `entities` - Should see new entities created
 - `entity_mentions` - Should see mentions linked to report
-- `reports` - Should see synced report from MongoDB
+- `reports` - Should see generated reports stored
 
 ---
 
@@ -280,14 +278,11 @@ npx prisma studio
 ### Database Status
 - ✅ Neon PostgreSQL connected
 - ✅ Prisma client configured with connection pooling
-- ✅ MongoDB connected for report storage
+- ✅ All data stored in PostgreSQL via Prisma
 
 ### Environment Variables (`.env.local`)
 ```bash
-# Database - MongoDB
-MONGODB_URI=mongodb://localhost:27017/assetworks
-
-# Database - Neon PostgreSQL (WITH FIXES)
+# Database - Neon PostgreSQL
 DATABASE_URL=postgresql://[username]:[password]@[host]/[database]?sslmode=require&connect_timeout=30&pool_timeout=30&pgbouncer=true
 DIRECT_URL=postgresql://[username]:[password]@[host]/[database]?sslmode=require&connect_timeout=30
 
@@ -316,9 +311,9 @@ NEXTAUTH_URL=http://localhost:3001
 ### Why Manual UUID Generation?
 
 The Prisma schema uses `id: String @id` instead of auto-increment because:
-1. **MongoDB compatibility** - Existing reports use MongoDB ObjectIds
-2. **Distributed systems** - UUIDs prevent ID conflicts across databases
-3. **Type consistency** - All IDs are strings throughout the codebase
+1. **Distributed systems** - UUIDs prevent ID conflicts in serverless environments
+2. **Type consistency** - All IDs are strings throughout the codebase
+3. **Flexibility** - UUIDs can be generated client-side if needed
 
 ### Why Background Processing?
 

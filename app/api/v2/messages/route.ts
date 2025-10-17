@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/auth-options';
+import { getServerSessionWithDev } from '@/lib/auth/dev-auth';
 import { z } from 'zod';
 import { prisma } from '@/lib/db/prisma';
 import { CacheService, CacheTTL } from '@/lib/services/redis.service';
@@ -37,20 +39,12 @@ export async function GET(request: NextRequest) {
 
   try {
     // Authentication
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSessionWithDev(authOptions);
+    if (!session?.user?.id) {
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
 
     // Parse query parameters
     const searchParams = request.nextUrl.searchParams;
@@ -70,7 +64,7 @@ export async function GET(request: NextRequest) {
     const thread = await prisma.threads.findFirst({
       where: {
         id: filters.threadId,
-        userId: user.id,
+        userId: userId,
       },
     });
 
@@ -132,13 +126,13 @@ export async function GET(request: NextRequest) {
     await CacheService.set(cacheKey, transformedMessages, CacheTTL.SHORT);
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       threadId: filters.threadId,
       count: messages.length,
     });
 
     LoggingService.info('Messages fetched', {
-      userId: user.id,
+      userId: userId,
       threadId: filters.threadId,
       count: messages.length,
       duration,
@@ -202,23 +196,14 @@ export async function POST(request: NextRequest) {
   try {
     // Authentication
     console.log('[Messages API] Starting authentication...');
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const session = await getServerSessionWithDev(authOptions);
+    if (!session?.user?.id) {
       console.error('[Messages API] No session found');
       throw AppErrors.UNAUTHORIZED;
     }
 
-    // Get user
-    console.log('[Messages API] Finding user:', session.user.email);
-    const user = await prisma.users.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!user) {
-      console.error('[Messages API] User not found');
-      throw new AppErrors.NOT_FOUND('User not found');
-    }
+    const userId = session.user.id;
+    console.log('[Messages API] User ID from session:', userId);
 
     // Parse and validate request
     console.log('[Messages API] Parsing request body...');
@@ -235,7 +220,7 @@ export async function POST(request: NextRequest) {
     const thread = await prisma.threads.findFirst({
       where: {
         id: validated.threadId,
-        userId: user.id,
+        userId: userId,
       },
     });
 
@@ -256,7 +241,7 @@ export async function POST(request: NextRequest) {
           connect: { id: validated.threadId }
         },
         users: {
-          connect: { id: user.id }
+          connect: { id: userId }
         },
         role: validated.role.toUpperCase() as any,
         content: validated.content,
@@ -279,8 +264,8 @@ export async function POST(request: NextRequest) {
     console.log('[Messages API] Clearing caches...');
     try {
       await CacheService.clearPattern(`messages:${validated.threadId}:*`);
-      await CacheService.del(`thread:${validated.threadId}:${user.id}`);
-      await CacheService.clearPattern(`threads:${user.id}:*`);
+      await CacheService.delete(`thread:${validated.threadId}:${userId}`);
+      await CacheService.clearPattern(`threads:${userId}:*`);
       console.log('[Messages API] Caches cleared');
     } catch (cacheError) {
       console.warn('[Messages API] Cache clearing failed (non-critical):', cacheError);
@@ -299,13 +284,13 @@ export async function POST(request: NextRequest) {
     }
 
     const duration = PerformanceMonitor.end(operationId, {
-      userId: user.id,
+      userId: userId,
       threadId: validated.threadId,
       messageId: message.id,
     });
 
     LoggingService.info('Message created', {
-      userId: user.id,
+      userId: userId,
       threadId: validated.threadId,
       messageId: message.id,
       role: message.role,
