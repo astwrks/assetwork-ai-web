@@ -9,7 +9,6 @@ import { prisma } from '@/lib/db/prisma';
 import { CacheService, CacheKeys, CacheTTL } from './redis.service';
 import { WebSocketService } from './websocket.service';
 import { nanoid } from 'nanoid';
-import { MockReportGenerationService } from './mock-report-generation.service';
 
 // Lazy initialization of Anthropic client
 let anthropic: Anthropic | null = null;
@@ -27,13 +26,6 @@ function getAnthropicClient(): Anthropic {
 }
 
 // Check if we should use mock service
-function shouldUseMockService(): boolean {
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  const hasApiKey = !!process.env.ANTHROPIC_API_KEY;
-  const forceMock = process.env.USE_MOCK_AI === 'true';
-
-  return forceMock || (isDevelopment && !hasApiKey);
-}
 
 // Report generation schemas
 export const ReportOptionsSchema = z.object({
@@ -132,11 +124,6 @@ export class ReportGenerationService {
     console.log('[Report Generation] Options:', JSON.stringify(options, null, 2));
 
     // Use mock service if appropriate
-    if (shouldUseMockService()) {
-      console.log('[Report Generation] Using mock service for development/testing');
-      return MockReportGenerationService.generateReport(userId, options);
-    }
-
     try {
       const validatedOptions = ReportOptionsSchema.parse(options);
       const reportId = nanoid();

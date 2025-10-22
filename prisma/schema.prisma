@@ -673,3 +673,19 @@ enum NotificationType {
   MARKET_ALERT
   SYSTEM
 }
+
+model system_prompts {
+  id          String   @id
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  content     String   @db.Text
+  icon        String?  @db.VarChar(50)
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  category    String?  @db.VarChar(50)
+  metadata    Json?    @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+
+  @@index([isActive, isDefault])
+}

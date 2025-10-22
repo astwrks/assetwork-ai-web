@@ -1,0 +1,444 @@
+/**
+ * AssetWorks PrimeReact Custom Theme
+ * Based on Lara theme with AssetWorks brand colors
+ */
+
+/* Import PrimeReact core and theme */
+@import 'primereact/resources/primereact.min.css';
+@import 'primeicons/primeicons.css';
+
+/* AssetWorks Custom Theme Variables - OFFICIAL Brand Guidelines v2.0 */
+:root {
+  /* PRIMARY BRAND COLORS - Official Guidelines */
+  --primary-navy: #1B2951;       /* PRIMARY NAVY - Main brand color */
+  --selection-blue: #6C7B95;     /* SELECTION BLUE-GRAY - Secondary */
+  --light-gray-bg: #F8F9FA;      /* LIGHT GRAY - Backgrounds */
+
+  /* Primary Scale (using official colors) */
+  --primary-50: #E8F4FD;         /* Ice Blue */
+  --primary-100: #E8F4FD;
+  --primary-200: #6CB4EE;        /* Sky Blue */
+  --primary-300: #6C7B95;        /* Selection Blue */
+  --primary-400: #405D80;        /* Deep Blue */
+  --primary-500: #1B2951;        /* PRIMARY NAVY */
+  --primary-600: #1B2951;        /* PRIMARY NAVY */
+  --primary-700: #151F3D;
+  --primary-800: #0F1529;
+  --primary-900: #0A0E1A;
+
+  /* Surface Colors - Official Grays */
+  --surface-0: #FFFFFF;
+  --surface-50: #F8F9FA;           /* Light Gray BG */
+  --surface-100: #E9ECEF;          /* Border Gray 10% */
+  --surface-200: #BDBCC2;          /* Border Gray 25% */
+  --surface-300: #9B9CA3;          /* Border Gray 40% */
+  --surface-400: #6D6E75;          /* Border Gray 60% */
+  --surface-500: #4A4B52;          /* Border Gray 80% */
+  --surface-600: #2C3E50;          /* Heavy Text */
+  --surface-700: #6C7B95;          /* Selection Blue */
+  --surface-800: #1B2951;          /* Primary Navy */
+  --surface-900: #0A0E1A;
+
+  /* Text Colors - Official */
+  --text-color: #2C3E50;           /* Heavy Text (Dark) */
+  --text-color-secondary: #6C7B95; /* Selection Blue */
+
+  /* Border & Focus */
+  --surface-border: #E9ECEF;       /* Border Gray 10% */
+  --focus-ring: 0 0 0 0.2rem rgba(27, 41, 81, 0.2);
+
+  /* Component Specific - Official Guidelines */
+  --border-radius: 8px;            /* Medium radius */
+  --content-padding: 24px;         /* Component margins */
+  --inline-spacing: 8px;           /* Component padding */
+
+  /* Semantic Colors - OFFICIAL from Guidelines */
+  --green-500: #28A745;            /* SUCCESS GREEN */
+  --red-500: #DC3545;              /* DANGER RED */
+  --amber-500: #FD7E14;            /* WARNING ORANGE */
+}
+
+/* Dark Mode */
+.dark {
+  --surface-0: #030712;
+  --surface-50: #111827;
+  --surface-100: #1f2937;
+  --surface-200: #374151;
+  --surface-300: #4b5563;
+  --surface-400: #6b7280;
+  --surface-500: #9ca3af;
+  --surface-600: #d1d5db;
+  --surface-700: #e5e7eb;
+  --surface-800: #f3f4f6;
+  --surface-900: #f9fafb;
+
+  --text-color: #f9fafb;
+  --text-color-secondary: #9ca3af;
+  --surface-border: #374151;
+  --focus-ring: 0 0 0 0.2rem rgba(37, 99, 235, 0.5);
+}
+
+/* Button Customization - Official Guidelines */
+.p-button {
+  background: var(--primary-navy);      /* PRIMARY NAVY #1B2951 */
+  color: #FFFFFF;
+  border: none;
+  border-radius: 8px;                  /* Medium radius from guidelines */
+  font-weight: 600;                    /* Semibold from typography */
+  padding: 12px 24px;                  /* From guidelines */
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.p-button:hover {
+  background: var(--primary-700);      /* Darker navy */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.p-button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.p-button:focus {
+  box-shadow: var(--focus-ring);
+}
+
+/* Button Variants */
+.p-button-secondary {
+  background: var(--surface-100);
+  color: var(--text-color);
+}
+
+.dark .p-button-secondary {
+  background: var(--surface-200);
+}
+
+.p-button-outlined {
+  background: transparent;
+  border: 1px solid var(--primary-600);
+  color: var(--primary-600);
+}
+
+.p-button-text {
+  background: transparent;
+  color: var(--primary-600);
+}
+
+.p-button-success {
+  background: var(--green-500);
+}
+
+.p-button-danger {
+  background: var(--red-500);
+}
+
+.p-button-warning {
+  background: var(--amber-500);
+}
+
+/* Card Customization */
+.p-card {
+  background: var(--surface-0);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--surface-border);
+  transition: all 0.2s ease;
+}
+
+.p-card:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.p-card-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.p-card-subtitle {
+  color: var(--text-color-secondary);
+}
+
+/* Input Customization */
+.p-inputtext {
+  border: 1px solid var(--surface-border);
+  border-radius: var(--border-radius);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  background: var(--surface-0);
+  color: var(--text-color);
+}
+
+/* Input Labels - High Contrast */
+.p-float-label label,
+.p-inputtext::placeholder {
+  color: var(--surface-400); /* Darker gray for better contrast */
+  font-weight: 500;
+}
+
+.p-float-label label.p-label-focus,
+.p-inputtext:focus::placeholder {
+  color: var(--primary-600);
+}
+
+.p-inputtext:hover {
+  border-color: var(--primary-400);
+}
+
+.p-inputtext:focus {
+  border-color: var(--primary-600);
+  box-shadow: var(--focus-ring);
+}
+
+/* DataTable Customization */
+.p-datatable {
+  background: var(--surface-0);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.p-datatable-header {
+  background: var(--surface-50);
+  border-bottom: 1px solid var(--surface-border);
+  padding: 1rem;
+}
+
+.p-datatable-thead > tr > th {
+  background: var(--surface-50);
+  color: var(--text-color);
+  font-weight: 600;
+  padding: 1rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.p-datatable-tbody > tr {
+  transition: background 0.2s ease;
+}
+
+.p-datatable-tbody > tr:hover {
+  background: var(--surface-50);
+}
+
+.p-datatable-tbody > tr > td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+/* Dialog/Modal Customization */
+.p-dialog {
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  background: var(--surface-0);
+}
+
+.p-dialog-header {
+  background: var(--surface-0);
+  border-bottom: 1px solid var(--surface-border);
+  padding: 1.5rem;
+}
+
+.p-dialog-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.p-dialog-content {
+  padding: 1.5rem;
+}
+
+/* Menu Customization */
+.p-menu {
+  background: var(--surface-0);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.p-menuitem-link {
+  padding: 0.75rem 1rem;
+  transition: all 0.2s ease;
+  color: var(--text-color);
+}
+
+.p-menuitem-link:hover {
+  background: var(--surface-100);
+}
+
+/* Toast Customization */
+.p-toast {
+  border-radius: var(--border-radius);
+}
+
+.p-toast-message {
+  border-radius: var(--border-radius);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.p-toast-message-success {
+  background: var(--green-500);
+}
+
+.p-toast-message-error {
+  background: var(--red-500);
+}
+
+.p-toast-message-warn {
+  background: var(--amber-500);
+}
+
+.p-toast-message-info {
+  background: var(--primary-600);
+}
+
+/* Badge Customization */
+.p-badge {
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+}
+
+.p-badge-success {
+  background: var(--green-500);
+}
+
+.p-badge-danger {
+  background: var(--red-500);
+}
+
+.p-badge-warning {
+  background: var(--amber-500);
+}
+
+.p-badge-info {
+  background: var(--primary-600);
+}
+
+/* Chart Container */
+.p-chart {
+  background: var(--surface-0);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+}
+
+/* Skeleton Customization */
+.p-skeleton {
+  background: var(--surface-200);
+  border-radius: var(--border-radius);
+}
+
+/* Progress Bar */
+.p-progressbar {
+  background: var(--surface-200);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.p-progressbar-value {
+  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+}
+
+/* Tabs */
+.p-tabview-nav {
+  background: var(--surface-0);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.p-tabview-nav-link {
+  color: var(--text-color-secondary);
+  transition: all 0.2s ease;
+}
+
+.p-tabview-nav-link:hover {
+  color: var(--primary-600);
+}
+
+.p-highlight .p-tabview-nav-link {
+  color: var(--primary-600);
+  border-bottom-color: var(--primary-600);
+}
+
+/* Dropdown */
+.p-dropdown {
+  border: 1px solid var(--surface-border);
+  border-radius: var(--border-radius);
+  background: var(--surface-0);
+}
+
+.p-dropdown:hover {
+  border-color: var(--primary-400);
+}
+
+.p-dropdown:focus {
+  border-color: var(--primary-600);
+  box-shadow: var(--focus-ring);
+}
+
+/* Panel */
+.p-panel {
+  background: var(--surface-0);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--border-radius);
+}
+
+.p-panel-header {
+  background: var(--surface-50);
+  border-bottom: 1px solid var(--surface-border);
+  padding: 1rem;
+}
+
+/* Utility Classes */
+.surface-card {
+  background: var(--surface-0);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+}
+
+.text-primary {
+  color: var(--primary-600);
+}
+
+.bg-primary {
+  background: var(--primary-600);
+  color: white;
+}
+
+.border-primary {
+  border-color: var(--primary-600);
+}
+
+/* Financial specific utilities */
+.profit {
+  color: var(--green-500);
+  font-weight: 600;
+}
+
+.loss {
+  color: var(--red-500);
+  font-weight: 600;
+}
+
+.neutral {
+  color: var(--text-color-secondary);
+}
+
+/* Gradient utilities */
+.gradient-primary {
+  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
+  color: white;
+}
+
+.gradient-accent {
+  background: linear-gradient(135deg, var(--primary-600) 0%, var(--indigo-500) 100%);
+  color: white;
+}
+
+.gradient-premium {
+  background: linear-gradient(135deg, var(--indigo-500) 0%, var(--purple-500) 100%);
+  color: white;
+}

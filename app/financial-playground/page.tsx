@@ -167,6 +167,7 @@ function FinancialPlayground() {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isReportPanelOpen, setIsReportPanelOpen] = useState(true);
 
   // Thread state
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -195,6 +196,7 @@ function FinancialPlayground() {
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Helper functions for managing messages
   const loadThread = async (threadId: string) => {
@@ -384,9 +386,18 @@ function FinancialPlayground() {
         loadThread(threadId).then((data) => {
           if (data) {
             setCurrentThread(data.thread);
-            setCurrentReport(data.report || null);
-            if (data.report?.entities) {
-              setReportEntities(data.report.entities);
+            // Map report content to htmlContent for consistency
+            if (data.report) {
+              const report = {
+                ...data.report,
+                htmlContent: data.report.htmlContent || data.report.content,
+              };
+              setCurrentReport(report);
+              if (data.report.entities) {
+                setReportEntities(data.report.entities);
+              }
+            } else {
+              setCurrentReport(null);
             }
           }
         });
@@ -531,7 +542,18 @@ function FinancialPlayground() {
   };
 
   const handleReportCancel = () => {
+    console.log('[FinancialPlayground] Cancelling report generation...');
+    
+    // Abort the fetch request if it's ongoing
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    // Clear pending state
     setPendingReportGeneration(null);
+    
+    toast.success('Report generation cancelled');
   };
 
   // Message action handlers
@@ -903,8 +925,8 @@ function FinancialPlayground() {
         <div className="flex-1 flex min-h-0">
           {/* Sidebar */}
           <aside className={cn(
-            "w-80 border-r bg-muted/30 flex-shrink-0 flex flex-col transition-all duration-300",
-            !isSidebarOpen && "-ml-80 md:ml-0 md:w-0",
+            "border-r bg-muted/30 flex-shrink-0 flex flex-col transition-all duration-300 overflow-hidden",
+            isSidebarOpen ? "w-80" : "w-0 border-0",
             isMobileMenuOpen && "fixed inset-0 z-50 bg-background md:relative md:inset-auto"
           )}>
             {/* Sidebar Header */}
@@ -1014,6 +1036,20 @@ function FinancialPlayground() {
                   </SelectContent>
                 </Select>
               </div>
+
+                {/* Report Panel Toggle */}
+                {!isReportPanelOpen && currentReport && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsReportPanelOpen(true)}
+                    className="h-8 gap-2"
+                  >
+                    <FileText className="w-3 h-3" />
+                    Show Report
+                    <ChevronLeft className="w-3 h-3" />
+                  </Button>
+                )}
             </div>
 
             {/* Report View with Entities */}
@@ -1122,18 +1158,66 @@ function FinancialPlayground() {
                     disabled={!!pendingReportGeneration}
                     className="flex-1"
                   />
-                  <Button
-                    onClick={() => sendMessage(inputMessage)}
-                    disabled={!!pendingReportGeneration || !inputMessage.trim()}
-                    size="icon"
-                    data-testid="send-button"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
+                  {pendingReportGeneration ? (
+                    <Button
+                      onClick={handleReportCancel}
+                      variant="destructive"
+                      size="icon"
+                      title="Stop generation"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => sendMessage(inputMessage)}
+                      disabled={!inputMessage.trim()}
+                      size="icon"
+                      data-testid="send-button"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
           </main>
+
+          {/* Right Report Panel - Shows Generated Reports */}
+          <aside className={cn(
+            "border-l bg-muted/30 flex-shrink-0 flex flex-col transition-all duration-300 overflow-hidden",
+            isReportPanelOpen ? "w-[600px]" : "w-0 border-0"
+          )}>
+            <div className="h-14 border-b px-4 flex items-center justify-between bg-background/50">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                <h2 className="font-semibold text-sm">Generated Report</h2>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setIsReportPanelOpen(false)}>
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="p-4">
+                {currentReport?.htmlContent ? (
+                  currentReport.htmlContent.includes('<!DOCTYPE html>') ? (
+                    <iframe
+                      srcDoc={currentReport.htmlContent}
+                      className="w-full min-h-[800px] border-0 rounded-lg bg-white"
+                      sandbox="allow-scripts allow-same-origin"
+                      title="Report"
+                    />
+                  ) : (
+                    <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: currentReport.htmlContent }} />
+                  )
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-64 text-center">
+                    <FileText className="w-12 h-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-sm text-muted-foreground">No report generated yet</p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </aside>
         </div>
 
         {/* Share Dialog */}

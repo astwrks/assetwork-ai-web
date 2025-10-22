@@ -19,7 +19,7 @@ const GenerateReportRequestSchema = z.object({
   threadId: z.string().optional(),
   prompt: z.string().min(10).max(5000),
   model: z.enum(['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307', 'claude-3-sonnet-20240229']).optional(),
-  systemPrompt: z.string().optional(),
+  systemPrompt: z.string().max(100000).optional(),
   options: z.object({
     stream: z.boolean().default(true),
     extractEntities: z.boolean().default(true),
