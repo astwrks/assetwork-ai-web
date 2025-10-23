@@ -32,34 +32,33 @@ export async function POST(
 
     // Parse HTML content into sections
     const htmlContent = report.htmlContent || '';
-    const currentSectionRefs = (report.sectionRefs as string[]) || [];
 
     // Simple regex to split by h2 or h3 headers
     const sectionMatches = htmlContent.match(/<h[23][^>]*>.*?<\/h[23]>[\s\S]*?(?=<h[23][^>]*>|$)/gi) || [];
 
+    const createdSections: any[] = [];
     const createdSectionIds: string[] = [];
 
     if (sectionMatches.length === 0) {
       // If no sections found, create one section with all content
-      const section = await prisma.report_sections.create({
-        data: {
-          id: randomUUID(),
-          reportId,
-          type: 'CUSTOM',
-          title: 'Full Report',
-          htmlContent: htmlContent,
-          order: 0,
-          version: 1,
-          editHistory: [],
-          metadata: {
-            originallyGeneratedBy: session.user.email,
-            lastModifiedBy: session.user.email,
-            originalPrompt: 'Converted from static report',
-          },
-          updatedAt: new Date(),
+      const sectionId = randomUUID();
+      createdSections.push({
+        id: sectionId,
+        type: 'CUSTOM',
+        title: 'Full Report',
+        htmlContent: htmlContent,
+        order: 0,
+        version: 1,
+        editHistory: [],
+        metadata: {
+          originallyGeneratedBy: session.user.email,
+          lastModifiedBy: session.user.email,
+          originalPrompt: 'Converted from static report',
         },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
-      createdSectionIds.push(section.id);
+      createdSectionIds.push(sectionId);
     } else {
       // Create sections from matches
       for (let i = 0; i < sectionMatches.length; i++) {
@@ -71,34 +70,34 @@ export async function POST(
           ? titleMatch[1].replace(/<[^>]+>/g, '').trim()
           : `Section ${i + 1}`;
 
-        const section = await prisma.report_sections.create({
-          data: {
-            id: randomUUID(),
-            reportId,
-            type: 'CUSTOM',
-            title,
-            htmlContent: sectionHtml,
-            order: i,
-            version: 1,
-            editHistory: [],
-            metadata: {
-              originallyGeneratedBy: session.user.email,
-              lastModifiedBy: session.user.email,
-              originalPrompt: 'Converted from static report',
-            },
-            updatedAt: new Date(),
+        const sectionId = randomUUID();
+        createdSections.push({
+          id: sectionId,
+          type: 'CUSTOM',
+          title,
+          htmlContent: sectionHtml,
+          order: i,
+          version: 1,
+          editHistory: [],
+          metadata: {
+            originallyGeneratedBy: session.user.email,
+            lastModifiedBy: session.user.email,
+            originalPrompt: 'Converted from static report',
           },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         });
-        createdSectionIds.push(section.id);
+        createdSectionIds.push(sectionId);
       }
     }
 
-    // Mark report as interactive and update sectionRefs
+    // Mark report as interactive and update sections in JSON field
     await prisma.playground_reports.update({
       where: { id: reportId },
       data: {
         isInteractiveMode: true,
-        sectionRefs: [...currentSectionRefs, ...createdSectionIds],
+        sections: createdSections,
+        sectionRefs: createdSectionIds,
         updatedAt: new Date(),
       },
     });

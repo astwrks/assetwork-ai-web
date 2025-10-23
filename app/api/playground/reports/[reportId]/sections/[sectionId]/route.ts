@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db/prisma';
 import { randomUUID } from 'crypto';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
-import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
+// import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
 
 // GET /api/playground/reports/:reportId/sections/:sectionId - Get specific section
 export async function GET(
@@ -158,12 +158,13 @@ export async function PATCH(
       }
 
       // Update context snapshot in background (non-blocking)
-      ContextSnapshotService.createOrUpdateReportSnapshot(
-        reportId,
-        'section_duplicated'
-      ).catch((error) => {
-        console.error('Failed to update report snapshot:', error);
-      });
+      // TODO: Re-enable after migrating ContextSnapshotService to Prisma
+      // ContextSnapshotService.createOrUpdateReportSnapshot(
+      //   reportId,
+      //   'section_duplicated'
+      // ).catch((error) => {
+      //   console.error('Failed to update report snapshot:', error);
+      // });
 
       return NextResponse.json({ section: newSection }, { status: 201 });
     }
@@ -254,12 +255,13 @@ Return only the HTML content, no explanations.`;
           });
 
           // Update context snapshot in background (non-blocking)
-          ContextSnapshotService.createOrUpdateReportSnapshot(
-            reportId,
-            'section_edited'
-          ).catch((error) => {
-            console.error('Failed to update report snapshot:', error);
-          });
+          // TODO: Re-enable after migrating ContextSnapshotService to Prisma
+          // ContextSnapshotService.createOrUpdateReportSnapshot(
+          //   reportId,
+          //   'section_edited'
+          // ).catch((error) => {
+          //   console.error('Failed to update report snapshot:', error);
+          // });
 
           // Fetch updated section
           const updatedSection = await prisma.report_sections.findUnique({
@@ -331,12 +333,13 @@ Return only the HTML content, no explanations.`;
     });
 
     // Update context snapshot in background (non-blocking)
-    ContextSnapshotService.createOrUpdateReportSnapshot(
-      reportId,
-      'section_updated'
-    ).catch((error) => {
-      console.error('Failed to update report snapshot:', error);
-    });
+    // TODO: Re-enable after migrating ContextSnapshotService to Prisma
+    // ContextSnapshotService.createOrUpdateReportSnapshot(
+    //   reportId,
+    //   'section_updated'
+    // ).catch((error) => {
+    //   console.error('Failed to update report snapshot:', error);
+    // });
 
     return NextResponse.json({ section: updatedSection }, { status: 200 });
   } catch (error) {
@@ -408,12 +411,13 @@ export async function DELETE(
     }
 
     // Update context snapshot in background (non-blocking)
-    ContextSnapshotService.createOrUpdateReportSnapshot(
-      reportId,
-      'section_deleted'
-    ).catch((error) => {
-      console.error('Failed to update report snapshot:', error);
-    });
+    // TODO: Re-enable after migrating ContextSnapshotService to Prisma
+    // ContextSnapshotService.createOrUpdateReportSnapshot(
+    //   reportId,
+    //   'section_deleted'
+    // ).catch((error) => {
+    //   console.error('Failed to update report snapshot:', error);
+    // });
 
     return NextResponse.json(
       { message: 'Section deleted successfully' },

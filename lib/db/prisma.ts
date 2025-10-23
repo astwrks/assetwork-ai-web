@@ -15,7 +15,13 @@ export const prisma =
         url: process.env.DATABASE_URL,
       },
     },
-  });
+    // Increase connection pool for long-running operations like report generation
+    __internal: {
+      engine: {
+        connection_limit: 20,
+      },
+    },
+  } as any);
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 

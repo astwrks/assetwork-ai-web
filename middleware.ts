@@ -3,6 +3,14 @@ import { NextResponse } from 'next/server';
 
 export default withAuth(
   function middleware(req) {
+    // In development mode with DEV_USER_ID, bypass auth for API routes
+    if (process.env.NODE_ENV === 'development' && process.env.DEV_USER_ID) {
+      // Allow API routes to handle their own dev authentication
+      if (req.nextUrl.pathname.startsWith('/api/')) {
+        return NextResponse.next();
+      }
+    }
+
     const token = req.nextauth.token;
     const isAuth = !!token;
     const isAuthPage = req.nextUrl.pathname.startsWith('/auth');
@@ -25,6 +33,12 @@ export default withAuth(
   {
     callbacks: {
       authorized: ({ token, req }) => {
+        // In development mode with DEV_USER_ID, allow all API routes
+        if (process.env.NODE_ENV === 'development' && process.env.DEV_USER_ID) {
+          if (req.nextUrl.pathname.startsWith('/api/')) {
+            return true;
+          }
+        }
         // Allow auth pages without token
         if (req.nextUrl.pathname.startsWith('/auth')) {
           return true;

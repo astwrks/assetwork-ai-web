@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
 import { trackReportUsage } from '@/lib/ai/usage-tracker';
-import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
+// import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
 
 // GET /api/playground/reports/:reportId/sections - Get all sections for a report
 export async function GET(
@@ -420,12 +420,13 @@ Generate a professional, visually stunning section now:`;
         }
 
         // Update context snapshot in background (non-blocking)
-        ContextSnapshotService.createOrUpdateReportSnapshot(
-          reportId,
-          'section_added'
-        ).catch((error) => {
-          console.error('Failed to update report snapshot:', error);
-        });
+        // TODO: Re-enable after migrating ContextSnapshotService to Prisma
+        // ContextSnapshotService.createOrUpdateReportSnapshot(
+        //   reportId,
+        //   'section_added'
+        // ).catch((error) => {
+        //   console.error('Failed to update report snapshot:', error);
+        // });
 
         // Get updated usage data for immediate client update
         const updatedReport = await prisma.playground_reports.findUnique({

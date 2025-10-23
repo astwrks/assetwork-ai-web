@@ -22,6 +22,7 @@ export async function GET(
         totalTokens: true,
         totalCost: true,
         operations: true,
+        model: true,
       },
     });
 
@@ -35,6 +36,7 @@ export async function GET(
       usage: {
         totalTokens: report.totalTokens || 0,
         totalCost: report.totalCost || 0,
+        model: report.model || 'Unknown',
         operations: (report.operations as any[]) || [],
       },
     });

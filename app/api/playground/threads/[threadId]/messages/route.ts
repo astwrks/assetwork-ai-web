@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto';
 import { claudeService } from '@/lib/ai/claude.service';
 import { openaiService } from '@/lib/ai/openai.service';
 import { trackReportUsage } from '@/lib/ai/usage-tracker';
-import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
+// import { ContextSnapshotService } from '@/lib/services/context-snapshot-service';
 import { syncReportToPrisma } from '@/lib/utils/report-sync';
 
 // System prompt for financial report generation with AssetWorks branding
@@ -584,12 +584,13 @@ export async function POST(
         });
 
         // Update context snapshot in background (non-blocking)
-        ContextSnapshotService.createOrUpdateThreadSnapshot(
-          threadId,
-          'message_created'
-        ).catch((error) => {
-          console.error('Failed to update thread snapshot:', error);
-        });
+        // TODO: Re-enable after migrating ContextSnapshotService to Prisma
+        // ContextSnapshotService.createOrUpdateThreadSnapshot(
+        //   threadId,
+        //   'message_created'
+        // ).catch((error) => {
+        //   console.error('Failed to update thread snapshot:', error);
+        // });
 
         // Report already created in Prisma, just sync entities (non-blocking)
         syncReportToPrisma({

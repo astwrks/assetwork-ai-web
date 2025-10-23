@@ -7,6 +7,7 @@ import { AlertCircle, RefreshCw, Edit2, Trash2, Copy, Check } from 'lucide-react
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
+import { MessageFeedback } from './MessageFeedback';
 
 interface Message {
   id: string;
@@ -100,45 +101,44 @@ export function MessageList({
                     </div>
                   )}
 
-                  <div className="mt-2 flex items-center gap-1">
-                    {message.role === 'assistant' && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleCopy(message)}
-                        className="h-7 text-xs"
-                      >
-                        {copiedId === message.id ? (
-                          <Check className="w-3 h-3 mr-1" />
-                        ) : (
-                          <Copy className="w-3 h-3 mr-1" />
-                        )}
-                        {copiedId === message.id ? 'Copied' : 'Copy'}
-                      </Button>
-                    )}
-                    {message.role === 'user' && onEdit && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onEdit(message)}
-                        className="h-7 text-xs"
-                      >
-                        <Edit2 className="w-3 h-3 mr-1" />
-                        Edit
-                      </Button>
-                    )}
-                    {onDelete && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onDelete(message.id)}
-                        className="h-7 text-xs text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-3 h-3 mr-1" />
-                        Delete
-                      </Button>
-                    )}
-                  </div>
+                  {/* Message actions and feedback */}
+                  {message.role === 'assistant' ? (
+                    <MessageFeedback
+                      messageId={message.id}
+                      messageContent={message.content}
+                      role={message.role}
+                      compact={true}
+                      className="mt-2 border-t pt-2"
+                      onFeedbackSubmitted={(feedback) => {
+                        console.log('Feedback submitted:', feedback);
+                      }}
+                    />
+                  ) : (
+                    <div className="mt-2 flex items-center gap-1">
+                      {message.role === 'user' && onEdit && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onEdit(message)}
+                          className="h-7 text-xs"
+                        >
+                          <Edit2 className="w-3 h-3 mr-1" />
+                          Edit
+                        </Button>
+                      )}
+                      {onDelete && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onDelete(message.id)}
+                          className="h-7 text-xs text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-3 h-3 mr-1" />
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </Card>
               </div>
 

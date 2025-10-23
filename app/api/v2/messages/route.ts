@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!filters.threadId) {
-      throw new AppErrors.BAD_REQUEST('Thread ID is required');
+      throw AppErrors.MISSING_REQUIRED_FIELD('threadId');
     }
 
     // Verify thread ownership
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!thread) {
-      throw new AppErrors.NOT_FOUND('Thread not found');
+      throw AppErrors.RECORD_NOT_FOUND('Thread', filters.threadId);
     }
 
     // Check cache
@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
 
     if (!thread) {
       console.error('[Messages API] Thread not found or unauthorized');
-      throw new AppErrors.NOT_FOUND('Thread not found');
+      throw AppErrors.RECORD_NOT_FOUND('Thread', validated.threadId);
     }
 
     // Create message
@@ -237,12 +237,8 @@ export async function POST(request: NextRequest) {
     const message = await prisma.messages.create({
       data: {
         id: messageId,
-        threads: {
-          connect: { id: validated.threadId }
-        },
-        users: {
-          connect: { id: userId }
-        },
+        threadId: validated.threadId,
+        userId: userId,
         role: validated.role.toUpperCase() as any,
         content: validated.content,
         metadata: validated.metadata || {},

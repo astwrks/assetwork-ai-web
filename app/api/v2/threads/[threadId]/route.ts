@@ -128,7 +128,7 @@ export async function GET(
     t0 = Date.now();
 
     if (!thread) {
-      throw new AppErrors.NOT_FOUND('Thread not found');
+      throw AppErrors.RECORD_NOT_FOUND('Thread', threadId);
     }
 
     // Get entities for the latest report
@@ -296,7 +296,7 @@ export async function PATCH(
     });
 
     if (!thread) {
-      throw new AppErrors.NOT_FOUND('Thread not found');
+      throw AppErrors.RECORD_NOT_FOUND('Thread', threadId);
     }
 
     // Prepare metadata update
@@ -429,7 +429,7 @@ export async function DELETE(
     });
 
     if (!thread) {
-      throw new AppErrors.NOT_FOUND('Thread not found');
+      throw AppErrors.RECORD_NOT_FOUND('Thread', threadId);
     }
 
     // Delete thread (cascades to messages and reports)
