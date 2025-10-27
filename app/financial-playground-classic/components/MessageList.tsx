@@ -8,14 +8,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import { MessageFeedback } from './MessageFeedback';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  createdAt?: Date;
-  status?: 'sending' | 'sent' | 'error';
-}
+import { MessageStatusBadge } from './MessageStatusBadge';
+import { Message } from './types';
 
 interface MessageListProps {
   messages: Message[];
@@ -35,6 +29,14 @@ export function MessageList({
   onCopy,
 }: MessageListProps) {
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('[MessageList] Rendering with messages:', {
+      count: messages.length,
+      messages: messages.map(m => ({ id: m.id, role: m.role, contentPreview: m.content?.substring(0, 50) })),
+    });
+  }, [messages]);
 
   const handleCopy = (message: Message) => {
     navigator.clipboard.writeText(message.content);
@@ -114,8 +116,9 @@ export function MessageList({
                       }}
                     />
                   ) : (
-                    <div className="mt-2 flex items-center gap-1">
-                      {message.role === 'user' && onEdit && (
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1">
+                        {message.role === 'user' && onEdit && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -126,16 +129,21 @@ export function MessageList({
                           Edit
                         </Button>
                       )}
-                      {onDelete && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onDelete(message.id)}
-                          className="h-7 text-xs text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="w-3 h-3 mr-1" />
-                          Delete
-                        </Button>
+                        {onDelete && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onDelete(message.id)}
+                            className="h-7 text-xs text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-3 h-3 mr-1" />
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                      {/* Status badge for user messages */}
+                      {message.role === 'user' && message.status && (
+                        <MessageStatusBadge status={message.status} />
                       )}
                     </div>
                   )}

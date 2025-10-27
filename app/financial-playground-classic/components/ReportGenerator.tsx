@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, FileText, CheckCircle2, AlertCircle, ChevronRight, X } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ReportSection, ReportSectionData } from './ReportSection';
 
 interface Section {
   id: string;
@@ -19,7 +20,7 @@ interface ReportGeneratorProps {
   prompt: string;
   model: string;
   systemPrompt?: any;
-  onReportComplete?: (report: any) => void;
+  onReportComplete?: (reportId: string) => void;
   onError?: (error: Error) => void;
   onContentUpdate?: (content: string) => void;
   onSectionsUpdate?: (sections: Section[]) => void;
@@ -138,13 +139,14 @@ export function ReportGenerator({
                 setProgress(Math.min(90, 20 + accumulatedSections.length * 5));
               }
               else if (data.type === 'complete') {
-                console.log('[ReportGenerator] Report complete');
+                console.log('[ReportGenerator] Report complete, reportId:', data.reportId);
                 setStatus('complete');
                 setProgress(100);
-                onReportComplete?.(data.report || { 
-                  htmlContent: accumulatedContent,
-                  sections: accumulatedSections 
-                });
+                if (data.reportId) {
+                  onReportComplete?.(data.reportId);
+                } else {
+                  console.error('[ReportGenerator] No reportId in complete event');
+                }
               } 
               else if (data.type === 'error') {
                 throw new Error(data.error);
@@ -158,13 +160,13 @@ export function ReportGenerator({
         }
       }
 
+      // Fallback: if stream ends without complete event
       if (accumulatedContent && status === 'generating') {
+        console.warn('[ReportGenerator] Stream ended without complete event');
         setStatus('complete');
         setProgress(100);
-        onReportComplete?.({ 
-          htmlContent: accumulatedContent,
-          sections: accumulatedSections 
-        });
+        // Don't call onReportComplete here since we don't have a reportId
+        // The report should have been saved on the backend and we should have received a complete event
       }
 
     } catch (err) {
@@ -192,9 +194,10 @@ export function ReportGenerator({
         {status === 'error' && <AlertCircle className="w-4 h-4" />}
       </div>
 
-      <div className="flex-1 max-w-[85%]">
-        <Card className="p-4">
-          {status === 'generating' && (
+      <div className="flex-1 max-w-full">
+        {/* Progress Header */}
+        {status === 'generating' && (
+          <Card className="p-4 mb-4">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -202,8 +205,8 @@ export function ReportGenerator({
                   <span className="text-sm font-medium">Generating comprehensive financial report...</span>
                 </div>
                 {onCancel && (
-                  <Button 
-                    variant="destructive" 
+                  <Button
+                    variant="destructive"
                     size="sm"
                     onClick={onCancel}
                     className="h-7"
@@ -217,63 +220,84 @@ export function ReportGenerator({
                 <span>{sections.length} sections</span>
                 <span>•</span>
                 <span>{content.length.toLocaleString()} characters</span>
-                {onShowReport && (
-                  <>
-                    <span>•</span>
-                    <Button 
-                      variant="link" 
-                      size="sm" 
-                      className="h-auto p-0 text-xs font-normal"
-                      onClick={onShowReport}
-                    >
-                      View in Report panel →
-                    </Button>
-                  </>
-                )}
               </div>
             </div>
-          )}
+          </Card>
+        )}
 
-          {status === 'complete' && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-green-600">
-                <CheckCircle2 className="w-4 h-4" />
-                <span className="text-sm font-semibold">Report Generated Successfully</span>
-              </div>
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>
-                  Generated a comprehensive financial analysis with {sections.length} sections 
-                  and {content.length.toLocaleString()} characters using {model}.
-                </p>
-                {sections.length > 0 && (
-                  <div className="text-xs">
-                    <strong>Sections included:</strong>
-                    <ul className="list-disc list-inside mt-1 space-y-0.5">
-                      {sections.slice(0, 5).map((section, i) => (
-                        <li key={i}>{section.title}</li>
-                      ))}
-                      {sections.length > 5 && (
-                        <li>...and {sections.length - 5} more sections</li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-              </div>
-              {onShowReport && (
-                <Button 
-                  onClick={onShowReport}
-                  className="w-full mt-2"
-                  size="sm"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Open Full Report
-                  <ChevronRight className="w-4 h-4 ml-2" />
-                </Button>
-              )}
-            </div>
-          )}
+        {/* Real-time Section Display - Show during generation AND after completion */}
+        {(status === 'generating' || status === 'complete') && sections.length > 0 && (
+          <div className="space-y-4 report-content">
+            <AnimatePresence mode="popLayout">
+              {sections.map((section, index) => {
+                const sectionData: ReportSectionData = {
+                  id: section.id,
+                  title: section.title,
+                  content: section.content,
+                  order: section.order,
+                  status: 'complete'
+                };
+                return (
+                  <motion.div
+                    key={section.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.4,
+                      delay: index * 0.05,
+                      ease: [0.4, 0, 0.2, 1]
+                    }}
+                  >
+                    <ReportSection section={sectionData} isLoading={false} />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
 
-          {status === 'error' && (
+            {/* Loading indicator for next section - only while generating */}
+            {status === 'generating' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex items-center justify-center py-4"
+              >
+                <div className="flex space-x-2">
+                  {[0, 1, 2].map((i) => (
+                    <motion.div
+                      key={i}
+                      className="w-2 h-2 bg-primary rounded-full"
+                      animate={{
+                        scale: [1, 1.5, 1],
+                        opacity: [0.3, 1, 0.3]
+                      }}
+                      transition={{
+                        duration: 1.2,
+                        delay: i * 0.2,
+                        repeat: Infinity
+                      }}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </div>
+        )}
+
+        {/* Completion indicator - subtle, doesn't replace sections */}
+        {status === 'complete' && sections.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground"
+          >
+            <CheckCircle2 className="w-4 h-4 text-green-600" />
+            <span>Report generation complete • {sections.length} sections • {content.length.toLocaleString()} characters</span>
+          </motion.div>
+        )}
+
+        {/* Error Card */}
+        {status === 'error' && (
+          <Card className="p-4">
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-destructive">
                 <AlertCircle className="w-4 h-4" />
@@ -283,8 +307,8 @@ export function ReportGenerator({
                 Check browser console for details
               </p>
             </div>
-          )}
-        </Card>
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -45,6 +45,7 @@ import {
   Database,
   Shield,
   Gauge,
+  Edit2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -94,6 +95,11 @@ import { ThreadListSkeleton } from '@/components/financial-playground/ThreadSkel
 import { ProgressiveLoader, useProgressiveLoader } from '@/components/ui/progressive-loader';
 import { MessageList } from './components/MessageList';
 import { EntityBar } from './components/EntityBar';
+import { EntityChips } from '@/components/entities/EntityChips';
+import ReportEditModal from './components/ReportEditModal';
+import { StreamingMessage } from './components/StreamingMessage';
+import { MessageSkeleton } from './components/MessageSkeleton';
+import { ProgressiveReportRenderer } from './components/ProgressiveReportRenderer';
 
 // Dynamic import for ReportGenerator to reduce initial bundle size
 const ReportGenerator = dynamic(() => import('./components/ReportGenerator').then(mod => ({ default: mod.ReportGenerator })), {
@@ -165,6 +171,7 @@ function FinancialPlayground() {
   // UI state
   const [showShareDialog, setShowShareDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -179,15 +186,22 @@ function FinancialPlayground() {
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
 
   // Report state
-  const [currentReport, setCurrentReport] = useState<Report | null>(null);
+  // Note: currentReport is now computed from messages (see computed values below)
+  const [isReportPanelOpen, setIsReportPanelOpen] = useState(false);
   const [pendingReportGeneration, setPendingReportGeneration] = useState<{
     threadId: string;
     prompt: string;
     model: string;
     systemPrompt?: SystemPromptWithIcon | null;
   } | null>(null);
+
+  // Streaming state for chat area
+  const [streamingContent, setStreamingContent] = useState('');
+  const [streamingTokens, setStreamingTokens] = useState<{ input: number; output: number }>({ input: 0, output: 0 });
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   // WebSocket connection
   const { isConnected, on, off } = useWebSocket();
@@ -196,8 +210,33 @@ function FinancialPlayground() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Computed values - get current report from messages (single source of truth)
+  const currentReport = React.useMemo(() => {
+    // Find the most recent assistant message with a report
+    const messagesWithReports = messages
+      .filter(m => m.role === 'assistant' && m.report)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+
+    const report = messagesWithReports.length > 0 ? messagesWithReports[0].report : null;
+    console.log('[FinancialPlayground] currentReport computed:', {
+      totalMessages: messages.length,
+      messagesWithReports: messagesWithReports.length,
+      hasReport: !!report,
+      reportId: report?.id,
+    });
+    return report;
+  }, [messages]);
+
+  // Auto-open report panel when thread has reports
+  useEffect(() => {
+    if (currentReport && !isReportPanelOpen && !pendingReportGeneration) {
+      console.log('[FinancialPlayground] Auto-opening report panel for loaded thread');
+      setIsReportPanelOpen(true);
+    }
+  }, [currentReport, isReportPanelOpen, pendingReportGeneration]);
+
   // Helper functions for managing messages
-  const loadThread = async (threadId: string) => {
+  const loadThread = useCallback(async (threadId: string) => {
     setIsLoadingCurrentThread(true);
     try {
       const response = await fetch(`/api/v2/threads/${threadId}`, {
@@ -207,7 +246,33 @@ function FinancialPlayground() {
       if (response.ok) {
         const data = await response.json();
         setCurrentThread(data.thread);
-        setMessages(data.messages || []);
+
+        // Map messages and attach report if available
+        const mappedMessages = (data.messages || []).map((msg: any) => ({
+          ...msg,
+          // Ensure role is lowercase
+          role: msg.role?.toLowerCase() || msg.role,
+          // Attach report to the last assistant message if report exists
+          report: null, // Will be set below if applicable
+        }));
+
+        // If there's a report, attach it to the most recent assistant message
+        if (data.report && mappedMessages.length > 0) {
+          const lastAssistantIndex = mappedMessages.map((m: any) => m.role).lastIndexOf('assistant');
+          if (lastAssistantIndex >= 0) {
+            mappedMessages[lastAssistantIndex] = {
+              ...mappedMessages[lastAssistantIndex],
+              report: data.report,
+            };
+          }
+        }
+
+        setMessages(mappedMessages);
+        console.log('[FinancialPlayground] Loaded thread:', {
+          threadId: data.thread?.id,
+          messagesCount: mappedMessages.length,
+          hasReport: !!data.report,
+        });
         return data;
       }
     } catch (error) {
@@ -217,7 +282,7 @@ function FinancialPlayground() {
       setIsLoadingCurrentThread(false);
     }
     return null;
-  };
+  }, []); // Empty deps - function doesn't depend on any external values
 
   const loadMoreMessages = async () => {
     if (!currentThread || isLoadingMoreMessages) return;
@@ -242,8 +307,25 @@ function FinancialPlayground() {
   };
 
   const sendMessage = async (content?: string) => {
+    // Prevent rapid multiple sends (debounce)
+    if (isSendingMessage) {
+      console.warn('[FinancialPlayground] sendMessage blocked: already sending');
+      return;
+    }
+
     const messageContent = content || inputMessage;
-    if (!messageContent.trim()) return;
+    console.log('[FinancialPlayground] sendMessage called with:', {
+      providedContent: content?.substring(0, 50),
+      inputMessageState: inputMessage.substring(0, 50),
+      finalContent: messageContent.substring(0, 50),
+    });
+
+    if (!messageContent.trim()) {
+      console.warn('[FinancialPlayground] sendMessage blocked: empty message');
+      return;
+    }
+
+    setIsSendingMessage(true);
 
     console.log('[FinancialPlayground] sendMessage called:', {
       messagePreview: messageContent.substring(0, 50) + '...',
@@ -321,9 +403,11 @@ function FinancialPlayground() {
     } catch (error) {
       console.error('[FinancialPlayground] Error sending message:', error);
       setMessages(prev => prev.map(m =>
-        m.id === tempId ? { ...m, status: 'failed' } : m
+        m.id === tempId ? { ...m, status: 'error' } : m
       ));
       toast.error('Failed to send message');
+    } finally {
+      setIsSendingMessage(false);
     }
   };
 
@@ -381,10 +465,11 @@ function FinancialPlayground() {
     if (threadId) {
       // If there's a thread ID in the URL, load it if it's different from current
       if (currentThread?.id !== threadId) {
+        console.log('[FinancialPlayground] Loading thread from URL:', threadId);
         loadThread(threadId).then((data) => {
           if (data) {
-            setCurrentThread(data.thread);
-            setCurrentReport(data.report || null);
+            // loadThread() already sets currentThread and messages with reports attached
+            // Just handle entities if present
             if (data.report?.entities) {
               setReportEntities(data.report.entities);
             }
@@ -392,14 +477,26 @@ function FinancialPlayground() {
         });
       }
     } else {
-      // If no thread ID in URL, clear the current thread
-      if (currentThread) {
+      // If no thread ID in URL, load the latest thread
+      if (threads.length > 0 && !currentThread) {
+        // Auto-load the most recent thread
+        const latestThread = threads[0]; // Threads are sorted by updatedAt desc
+        console.log('[FinancialPlayground] Auto-loading latest thread:', latestThread.id);
+
+        // Update URL with latest thread ID
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('thread', latestThread.id);
+        router.push(`/financial-playground-classic?${params.toString()}`);
+
+        // Load the thread
+        loadThread(latestThread.id);
+      } else if (threads.length === 0 && currentThread) {
+        // Clear if no threads exist
         setCurrentThread(null);
-        setMessages([]);
-        setCurrentReport(null);
+        setMessages([]); // Clearing messages automatically clears currentReport (computed)
       }
     }
-  }, [searchParams, session, isLoadingThreads, currentThread, loadThread, setMessages]);
+  }, [searchParams, session, isLoadingThreads, currentThread, threads, loadThread, router]);
 
   // Auto-scroll messages
   useEffect(() => {
@@ -496,13 +593,12 @@ function FinancialPlayground() {
     setThreads(prev => prev.filter(t => t.id !== threadId));
     if (currentThread?.id === threadId) {
       setCurrentThread(null);
-      setMessages([]);
-      setCurrentReport(null);
+      setMessages([]); // Clearing messages automatically clears currentReport (computed)
 
       // Clear thread from URL
       const params = new URLSearchParams(searchParams.toString());
       params.delete('thread');
-      const newUrl = params.toString() ? `/financial-playground?${params.toString()}` : '/financial-playground';
+      const newUrl = params.toString() ? `/financial-playground-classic?${params.toString()}` : '/financial-playground-classic';
       router.push(newUrl);
     }
   };
@@ -511,16 +607,69 @@ function FinancialPlayground() {
     // Update URL with thread ID
     const params = new URLSearchParams(searchParams.toString());
     params.set('thread', thread.id);
-    router.push(`/financial-playground?${params.toString()}`);
+    router.push(`/financial-playground-classic?${params.toString()}`);
     loadThread(thread.id);
     setIsMobileMenuOpen(false);
   };
 
   // Report generation handlers
-  const handleReportComplete = (report: Report, message: Message) => {
-    setCurrentReport(report);
-    setMessages(prev => [...prev, message]);
+  const handleReportComplete = async (reportId: string) => {
+    console.log('[FinancialPlayground] Report complete, fetching full report:', reportId);
+
+    // Fetch the complete report from the database
+    try {
+      const response = await fetch(`/api/v2/reports/${reportId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch report: ${response.statusText}`);
+      }
+
+      const { data: report } = await response.json();
+
+      // Find the most recent assistant message to attach this report to
+      const lastAssistantMessage = messages
+        .filter(m => m.role === 'assistant')
+        .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())[0];
+
+      if (lastAssistantMessage) {
+        // Attach report to existing assistant message
+        setMessages(prev => {
+          const existingIndex = prev.findIndex(m => m.id === lastAssistantMessage.id);
+          if (existingIndex >= 0) {
+            const updated = [...prev];
+            updated[existingIndex] = {
+              ...updated[existingIndex],
+              report: report,
+              status: 'complete',
+            };
+            return updated;
+          }
+          return prev;
+        });
+      } else {
+        // Create new assistant message with report
+        const assistantMessage: Message = {
+          id: `msg-${Date.now()}`,
+          threadId: currentThread?.id || '',
+          role: 'assistant',
+          content: streamingContent || 'Report generated successfully',
+          createdAt: new Date().toISOString(),
+          report: report,
+          status: 'complete',
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      }
+    } catch (error) {
+      console.error('[FinancialPlayground] Failed to fetch complete report:', error);
+      handleReportError(error as Error);
+      return;
+    }
+
     setPendingReportGeneration(null);
+
+    // Clear streaming state
+    setStreamingContent('');
+    setStreamingTokens({ input: 0, output: 0 });
+
     if (report.entities) {
       setReportEntities(report.entities);
     }
@@ -532,6 +681,44 @@ function FinancialPlayground() {
 
   const handleReportCancel = () => {
     setPendingReportGeneration(null);
+
+    // Clear streaming state on cancel
+    setStreamingContent('');
+    setStreamingTokens({ input: 0, output: 0 });
+    setGenerationError(null);
+  };
+
+  const handleReportError = (error: Error) => {
+    console.error('[FinancialPlayground] Report generation error:', error);
+    setGenerationError(error.message || 'Failed to generate report');
+    setPendingReportGeneration(null);
+
+    // Clear streaming state
+    setStreamingContent('');
+    setStreamingTokens({ input: 0, output: 0 });
+
+    // Show error toast
+    toast.error(`Report generation failed: ${error.message}`);
+  };
+
+  const handleRetryReport = () => {
+    if (!currentThread) return;
+
+    // Get the last user message to retry
+    const lastUserMessage = messages
+      .filter(m => m.role === 'user')
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())[0];
+
+    if (lastUserMessage) {
+      setGenerationError(null);
+      setPendingReportGeneration({
+        threadId: currentThread.id,
+        prompt: lastUserMessage.content,
+        model: selectedModel,
+        systemPrompt: selectedPrompt,
+      });
+      setIsReportPanelOpen(true);
+    }
   };
 
   // Message action handlers
@@ -605,13 +792,12 @@ function FinancialPlayground() {
 
         setThreads([newThread, ...threads]);
         setCurrentThread(newThread);
-        setMessages([]);
-        setCurrentReport(null);
+        setMessages([]); // Clearing messages automatically clears currentReport (computed)
 
         // Update URL with new thread ID
         const params = new URLSearchParams(searchParams.toString());
         params.set('thread', newThread.id);
-        const newUrl = `/financial-playground?${params.toString()}`;
+        const newUrl = `/financial-playground-classic?${params.toString()}`;
         console.log('[FinancialPlayground] Updating URL to:', newUrl);
         router.push(newUrl);
 
@@ -848,6 +1034,22 @@ function FinancialPlayground() {
 
             {/* Token Counter - removed as it's now handled by ReportGenerator */}
 
+            {/* View Report Button */}
+            {currentReport && !isReportPanelOpen && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setIsReportPanelOpen(true)}
+                className="gap-2 animate-pulse"
+              >
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">View Report</span>
+                <Badge variant="secondary" className="ml-1 bg-green-500 text-white">
+                  Ready
+                </Badge>
+              </Button>
+            )}
+
             {/* Export Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -904,7 +1106,8 @@ function FinancialPlayground() {
           {/* Sidebar */}
           <aside className={cn(
             "w-80 border-r bg-muted/30 flex-shrink-0 flex flex-col transition-all duration-300",
-            !isSidebarOpen && "-ml-80 md:ml-0 md:w-0",
+            !isSidebarOpen && "-ml-80 md:ml-0 md:w-0 md:overflow-hidden md:border-r-0",
+            isSidebarOpen && "overflow-visible",
             isMobileMenuOpen && "fixed inset-0 z-50 bg-background md:relative md:inset-auto"
           )}>
             {/* Sidebar Header */}
@@ -956,14 +1159,21 @@ function FinancialPlayground() {
                   <Code className="w-4 h-4 text-muted-foreground" />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-8">
-                        {selectedPrompt && (
+                      <Button variant="outline" size="sm" className="h-8 min-w-[180px] justify-between">
+                        {selectedPrompt ? (
                           <>
-                            <selectedPrompt.icon className="w-3 h-3 mr-2" />
-                            {selectedPrompt.name}
+                            <div className="flex items-center gap-2">
+                              <selectedPrompt.icon className="w-3 h-3" />
+                              <span className="truncate">{selectedPrompt.name}</span>
+                            </div>
+                            <ChevronDown className="w-3 h-3 ml-2 flex-shrink-0" />
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-muted-foreground">Select System Prompt</span>
+                            <ChevronDown className="w-3 h-3 ml-2 flex-shrink-0" />
                           </>
                         )}
-                        <ChevronDown className="w-3 h-3 ml-2" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-72 z-[100]">
@@ -1091,21 +1301,43 @@ function FinancialPlayground() {
                         showActions={true}
                       />
 
-                      {/* Report Generator Component */}
+                      {/* Streaming Message - Shows in chat during generation */}
                       {pendingReportGeneration && (
-                        <ReportGenerator
-                          threadId={pendingReportGeneration.threadId}
-                          prompt={pendingReportGeneration.prompt}
-                          model={pendingReportGeneration.model}
-                          systemPrompt={pendingReportGeneration.systemPrompt}
-                          onReportComplete={handleReportComplete}
-                          onEntityExtracted={handleEntityExtracted}
-                          onCancel={handleReportCancel}
-                          className="mb-6"
+                        <StreamingMessage
+                          content={streamingContent}
+                          inputTokens={streamingTokens.input}
+                          outputTokens={streamingTokens.output}
+                          onStop={handleReportCancel}
                         />
+                      )}
+
+                      {/* Error Message - Shows when generation fails */}
+                      {generationError && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mb-4"
+                        >
+                          <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription className="flex items-center justify-between">
+                              <span>{generationError}</span>
+                              <Button
+                                onClick={handleRetryReport}
+                                variant="outline"
+                                size="sm"
+                                className="ml-4"
+                              >
+                                <RefreshCw className="w-3 h-3 mr-2" />
+                                Retry
+                              </Button>
+                            </AlertDescription>
+                          </Alert>
+                        </motion.div>
                       )}
                     </>
                   )}
+
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
@@ -1117,14 +1349,24 @@ function FinancialPlayground() {
                     ref={inputRef}
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(inputMessage)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (inputMessage.trim() && !pendingReportGeneration && !isSendingMessage) {
+                          sendMessage();
+                        }
+                      }
+                    }}
                     placeholder="Ask for financial insights..."
-                    disabled={!!pendingReportGeneration}
+                    disabled={!!pendingReportGeneration || isSendingMessage}
                     className="flex-1"
                   />
                   <Button
-                    onClick={() => sendMessage(inputMessage)}
-                    disabled={!!pendingReportGeneration || !inputMessage.trim()}
+                    onClick={() => {
+                      console.log('[FinancialPlayground] Send button clicked, inputMessage:', inputMessage);
+                      sendMessage();
+                    }}
+                    disabled={!!pendingReportGeneration || !inputMessage.trim() || isSendingMessage}
                     size="icon"
                     data-testid="send-button"
                   >
@@ -1134,6 +1376,99 @@ function FinancialPlayground() {
               </div>
             </div>
           </main>
+
+          {/* Right Report Panel - Animated */}
+          <AnimatePresence mode="wait">
+            {(isReportPanelOpen || pendingReportGeneration) && (
+              <motion.aside
+                initial={{ width: 0, opacity: 0, x: 100 }}
+                animate={{ width: 500, opacity: 1, x: 0 }}
+                exit={{ width: 0, opacity: 0, x: 100 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                className="border-l bg-muted/30 flex flex-col flex-shrink-0 overflow-hidden"
+              >
+              <div className="h-14 border-b px-4 flex items-center justify-between bg-background/50">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-muted-foreground" />
+                  <h2 className="font-semibold text-sm">Generated Report</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowEditModal(true)}
+                    disabled={!currentReport}
+                    className="h-8"
+                  >
+                    <Edit2 className="w-3 h-3 mr-2" />
+                    Edit
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => setIsReportPanelOpen(false)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Entity Chips - Show when report exists */}
+              {currentReport && (
+                <div className="border-b bg-muted/30">
+                  <EntityChips reportId={currentReport.id} className="px-4 py-2" />
+                </div>
+              )}
+
+              <ScrollArea className="flex-1">
+                <div className="p-4">
+                  {/* Show ReportGenerator while generating */}
+                  {pendingReportGeneration ? (
+                    <>
+                      {/* Hidden ReportGenerator for API streaming */}
+                      <div className="hidden">
+                        <ReportGenerator
+                          threadId={pendingReportGeneration.threadId}
+                          prompt={pendingReportGeneration.prompt}
+                          model={pendingReportGeneration.model}
+                          systemPrompt={pendingReportGeneration.systemPrompt}
+                          onReportComplete={handleReportComplete}
+                          onEntityExtracted={handleEntityExtracted}
+                          onCancel={handleReportCancel}
+                          onError={handleReportError}
+                          onContentUpdate={(content) => {
+                            setStreamingContent(content);
+                            // TODO: Extract token counts from streaming response
+                            // For now, estimate based on content length (rough approximation)
+                            const estimatedTokens = Math.floor(content.length / 4);
+                            setStreamingTokens({
+                              input: 0, // Will be updated when API includes token data
+                              output: estimatedTokens
+                            });
+                          }}
+                          className=""
+                        />
+                      </div>
+
+                      {/* Progressive section-by-section renderer */}
+                      <ProgressiveReportRenderer
+                        streamingContent={streamingContent}
+                        isComplete={false}
+                      />
+                    </>
+                  ) : currentReport ? (
+                    <ProgressiveReportRenderer
+                      streamingContent={currentReport.htmlContent || currentReport.content || ''}
+                      isComplete={true}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-64 text-center">
+                      <FileText className="w-12 h-12 text-muted-foreground/50 mb-4" />
+                      <p className="text-sm text-muted-foreground">No report generated yet</p>
+                      <p className="text-xs text-muted-foreground mt-2">Ask a question to generate a report</p>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+              </motion.aside>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Share Dialog */}
@@ -1196,6 +1531,26 @@ function FinancialPlayground() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Report Edit Modal */}
+        {showEditModal && currentReport && (
+          <ReportEditModal
+            report={{
+              id: currentReport.id,
+              title: currentReport.title || 'Financial Report',
+              htmlContent: currentReport.htmlContent || currentReport.content || '',
+              version: currentReport.version || 1,
+            }}
+            onClose={() => setShowEditModal(false)}
+            onSave={async () => {
+              // Reload the current report to show changes
+              if (currentThread) {
+                await loadThread(currentThread.id);
+              }
+              setShowEditModal(false);
+            }}
+          />
+        )}
       </div>
     </TooltipProvider>
   );

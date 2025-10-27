@@ -8,11 +8,18 @@ import { LucideIcon } from 'lucide-react';
 // Re-export Prisma types that are used directly
 export type {
   entities as Entity,
-  messages as Message,
+  messages as PrismaMessage,
   reports as Report,
   threads as Thread,
   system_prompts as SystemPrompt,
 } from '@prisma/client';
+
+// Extended Message type that includes the full report object
+export interface Message extends Omit<PrismaMessage, 'role'> {
+  role: 'user' | 'assistant' | 'system';
+  status?: 'sending' | 'sent' | 'delivered' | 'streaming' | 'complete' | 'error';
+  report?: Report | null; // Full report object instead of just reportId
+}
 
 // Extended types with icon support
 export interface SystemPromptWithIcon {

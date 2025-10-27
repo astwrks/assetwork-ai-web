@@ -1965,7 +1965,7 @@ Please click "Generate Report" to get a detailed analysis, or try sending your m
             </div>
 
             {/* Token and Cost Display - Real API Data */}
-            {reportUsage && (
+            {reportUsage && !isGeneratingReport && !pendingReportGeneration && (
               <div className="border-b px-4 py-2 bg-muted/20 flex items-center justify-between text-sm">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">

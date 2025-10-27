@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface CollapsibleSectionProps {
   title: string;
@@ -104,15 +105,38 @@ export function CollapsibleSection({
         )}
       </div>
 
-      {isOpen && (
-        <div className={cn(
-          "border-t",
-          compact ? "p-2" : "p-4",
-          contentClassName
-        )}>
-          {children}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{
+              height: "auto",
+              opacity: 1,
+              transition: {
+                height: { duration: 0.3, ease: [0.4, 0, 0.2, 1] },
+                opacity: { duration: 0.2, delay: 0.1 }
+              }
+            }}
+            exit={{
+              height: 0,
+              opacity: 0,
+              transition: {
+                height: { duration: 0.3, ease: [0.4, 0, 0.2, 1] },
+                opacity: { duration: 0.15 }
+              }
+            }}
+            style={{ overflow: "hidden" }}
+            className="border-t"
+          >
+            <div className={cn(
+              compact ? "p-2" : "p-4",
+              contentClassName
+            )}>
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

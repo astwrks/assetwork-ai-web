@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 
 /**
  * Dynamic route for thread-specific financial playground
- * This handles URLs like /financial-playground/[threadId]
+ * This handles URLs like /financial-playground-classic/[threadId]
  * and redirects to the main playground with the thread ID as a query param
  */
 export default function ThreadPage() {
@@ -17,7 +17,7 @@ export default function ThreadPage() {
     if (threadId) {
       // Redirect to main playground with thread query param
       // This maintains backward compatibility while supporting dynamic URLs
-      router.replace(`/financial-playground?thread=${threadId}`);
+      router.replace(`/financial-playground-classic?thread=${threadId}`);
     }
   }, [threadId, router]);
 

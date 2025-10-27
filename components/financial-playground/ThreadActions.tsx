@@ -314,7 +314,7 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
   if (variant === 'menu') {
     return (
       <>
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
@@ -325,7 +325,12 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
               <MoreVertical className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent
+            align="end"
+            className="w-48 z-[200]"
+            sideOffset={5}
+            alignOffset={-5}
+          >
             {/* Bookmark */}
             <DropdownMenuItem onClick={handleToggleBookmark}>
               {thread.isBookmarked ? (
@@ -398,7 +403,7 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
 
         {/* Rename Dialog */}
         <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
-          <DialogContent>
+          <DialogContent className="z-[250]">
             <DialogHeader>
               <DialogTitle>Rename Thread</DialogTitle>
               <DialogDescription>
@@ -440,7 +445,7 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
 
         {/* Delete Confirmation */}
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <AlertDialogContent>
+          <AlertDialogContent className="z-[250]">
             <AlertDialogHeader>
               <AlertDialogTitle>Delete Thread?</AlertDialogTitle>
               <AlertDialogDescription>
@@ -458,7 +463,7 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
 
         {/* Context Dialog */}
         <Dialog open={showContextDialog} onOpenChange={setShowContextDialog}>
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-3xl z-[250]">
             <DialogHeader>
               <DialogTitle>Thread Context</DialogTitle>
               <DialogDescription>
@@ -509,7 +514,7 @@ export const ThreadActions: React.FC<ThreadActionsProps> = ({
 
         {/* Compress Dialog */}
         <Dialog open={showCompressDialog} onOpenChange={setShowCompressDialog}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl z-[250]">
             <DialogHeader>
               <DialogTitle>Compress Thread with AI</DialogTitle>
               <DialogDescription>

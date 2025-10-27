@@ -65,7 +65,7 @@ export function ReportSection({ section, isLoading = false }: ReportSectionProps
         initial="hidden"
         animate="visible"
         exit="exit"
-        className="report-section mb-6 overflow-hidden"
+        className="report-section mb-6"
       >
         {isLoading || section.status === 'loading' ? (
           <motion.div

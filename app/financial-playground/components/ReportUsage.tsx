@@ -98,12 +98,12 @@ export function ReportUsage({ reportId, className }: ReportUsageProps) {
   };
 
   const formatCost = (cost: number | undefined) => {
-    if (cost === undefined || cost === null) return '$0.0000';
+    if (cost === undefined || cost === null || isNaN(cost)) return '$0.0000';
     return `$${cost.toFixed(4)}`;
   };
 
   const formatTokens = (tokens: number | undefined) => {
-    if (tokens === undefined || tokens === null) return '0';
+    if (tokens === undefined || tokens === null || isNaN(tokens)) return '0';
     return tokens.toLocaleString();
   };
 
@@ -155,7 +155,7 @@ export function ReportUsage({ reportId, className }: ReportUsageProps) {
     return null;
   }
 
-  const tokenPercentage = (usage.outputTokens / usage.totalTokens) * 100;
+  const tokenPercentage = usage.totalTokens > 0 ? (usage.outputTokens / usage.totalTokens) * 100 : 0;
 
   return (
     <Card className={className}>
@@ -212,7 +212,7 @@ export function ReportUsage({ reportId, className }: ReportUsageProps) {
               {formatCost(usage.totalCost)}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              ${(usage.totalCost / usage.totalTokens * 1000).toFixed(2)}/1K tokens
+              ${usage.totalTokens > 0 ? (usage.totalCost / usage.totalTokens * 1000).toFixed(2) : '0.00'}/1K tokens
             </div>
           </motion.div>
         </div>

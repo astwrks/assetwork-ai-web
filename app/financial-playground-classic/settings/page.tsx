@@ -281,7 +281,7 @@ export default function PlaygroundSettingsPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => router.push('/financial-playground')}
+                onClick={() => router.push('/financial-playground-classic')}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Playground
